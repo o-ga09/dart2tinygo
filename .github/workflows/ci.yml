@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    name: dart analyze / dart test (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - packages/dart2tinygo
+          - packages/tinygo_annotations
+          - packages/tinygo_machine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - name: Install dependencies
+        working-directory: ${{ matrix.package }}
+        run: dart pub get
+      - name: Analyze
+        working-directory: ${{ matrix.package }}
+        run: dart analyze
+      - name: Test
+        working-directory: ${{ matrix.package }}
+        run: dart test
+
+  tinygo-compile:
+    name: TinyGo compile test (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [wioterminal, pico]
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: once the `dart2tinygo build` command is implemented, replace this
+      # with a step that converts an examples/ sample to Go and verifies it
+      # builds with `tinygo build -target=${{ matrix.target }}`.
+      - name: Placeholder (transpiler not implemented yet)
+        run: echo "This job is not enabled yet because the dart2tinygo transpiler is not implemented."

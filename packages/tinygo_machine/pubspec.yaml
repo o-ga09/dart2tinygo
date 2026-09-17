@@ -1,0 +1,14 @@
+name: tinygo_machine
+description: >
+  TinyGo 共通 machine パッケージ（GPIO, time, LED など）のボード非依存バインディング。
+  現時点では実装なし（スケルトンのみ）。
+version: 0.0.0
+publish_to: none
+repository: https://github.com/o-ga09/dart2tinygo
+topics:
+  - embedded
+  - tinygo
+  - microcontroller
+
+environment:
+  sdk: ^3.0.0

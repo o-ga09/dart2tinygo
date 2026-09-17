@@ -1,0 +1,15 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Go
+*.exe
+*.o
+/dist/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/

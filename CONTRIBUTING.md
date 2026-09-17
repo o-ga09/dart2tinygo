@@ -1,0 +1,38 @@
+# Contributing to dart2tinygo
+
+**Languages:** English | [日本語](./CONTRIBUTING.ja.md)
+
+This project is an OSS transpiler that converts a subset of Dart into TinyGo source code.
+
+## Design principles (must follow)
+
+- **Never put board-specific knowledge into the core (`packages/dart2tinygo`).** Board support is provided as separate binding packages, and bindings declare their Go-side counterparts via Dart annotations (`@GoImport` / `@GoName` / `@GoType`).
+- When in doubt, prioritize in this order: **correctness of the conversion > binary size > readability of the generated code**.
+- Do not use `fmt.Sprintf` for string interpolation in generated code (concatenate with `strconv` etc. based on type, to avoid bloating the TinyGo binary).
+
+## Workflow for adding a language feature
+
+1. Clarify the Dart syntax/feature you want to support in an issue (use the "unsupported syntax request" template).
+2. Check whether `packages/dart2tinygo/lib/src/checker/` needs detection/error reporting for the unsupported case.
+3. Implement the Go code generation in `packages/dart2tinygo/lib/src/backend/`.
+4. Once the conversion rule is decided, record it in [`docs/mapping.md`](./docs/mapping.md).
+5. In the same PR, make sure to update:
+   - The golden tests in `packages/dart2tinygo/test/golden/` (see below)
+   - The support status table in [`docs/supported_features.md`](./docs/supported_features.md)
+
+## Adding golden tests
+
+- Add a `<case>.dart` (input) and `<case>.go` (expected generated output) pair under `packages/dart2tinygo/test/golden/`.
+- Name cases after the feature under test (e.g. `string_interpolation.dart` / `string_interpolation.go`).
+- Expected output should be regeneratable via a `--update-goldens`-style option (depends on the transpiler implementation; update this section once implemented).
+- Tests for unsupported syntax should also verify the expected error message and line number.
+
+## Workflow for adding/changing bindings
+
+- Before adding a new annotation or API, first consider whether it can be expressed with existing annotations or configuration (to keep board-specific code out of the core).
+- Once the annotation API is decided, reflect it in [`docs/writing_bindings.md`](./docs/writing_bindings.md).
+
+## Before opening a PR
+
+- Make sure `dart analyze` / `dart test` pass.
+- Check that the relevant `docs/` files are updated.
