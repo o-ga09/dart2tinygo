@@ -1,0 +1,68 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks (secret scanning)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trufflehog:
+    name: trufflehog (verified secret scanning)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6 # v3.97.5
+        with:
+          path: ./
+          extra_args: --results=verified,unknown
+
+  semgrep:
+    name: semgrep (SAST)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Run Semgrep
+        run: semgrep scan --config=auto --sarif --output=semgrep.sarif
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@3ea06614dafe36dec890db3446326e0d40ce53d4 # v3.38.1
+        with:
+          sarif_file: semgrep.sarif
+
+  osv-scanner:
+    name: OSV-Scanner (dependency vulnerabilities)
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@98b584ee2ed2da3935ccce10e06739d54cdcd20b # v2.0.0
+    with:
+      scan-args: |-
+        --recursive
+        --skip-git
+        ./
