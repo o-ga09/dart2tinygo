@@ -16,7 +16,7 @@ jobs:
           - packages/tinygo_annotations
           - packages/tinygo_machine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
       - name: Install dependencies
         working-directory: ${{ matrix.package }}
@@ -35,7 +35,7 @@ jobs:
       matrix:
         target: [wioterminal, pico]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # TODO: once the `dart2tinygo build` command is implemented, replace this
       # with a step that converts an examples/ sample to Go and verifies it
       # builds with `tinygo build -target=${{ matrix.target }}`.
