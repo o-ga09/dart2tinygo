@@ -17,8 +17,8 @@ jobs:
           - packages/tinygo_machine
           - packages/wio_terminal
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       # Pub workspace: one `dart pub get` at the root resolves every package.
       - name: Install dependencies
         run: dart pub get
@@ -43,13 +43,13 @@ jobs:
       matrix:
         target: [wioterminal, pico]
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
       # TinyGo 0.42 requires Go 1.25–1.27; the runner default is older.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
-      - uses: acifani/setup-tinygo@v3
+      - uses: acifani/setup-tinygo@f51bf108c9895381060398804ce6cf6f62692106 # v3.0.1
         with:
           tinygo-version: "0.42.0"
       - name: Install dependencies
