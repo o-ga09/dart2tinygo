@@ -1,0 +1,44 @@
+name: Publish to pub.dev
+
+# Publishes the lockstep-versioned packages when a release tag (vX.Y.Z, created
+# by tagpr) is pushed. Authentication is pub.dev's GitHub Actions OIDC
+# publishing: setup-dart provisions the token when the job has
+# `id-token: write`, and each package on pub.dev must have automated
+# publishing enabled for this repository with tag pattern `v{{version}}`
+# (see docs/releasing.md). Packages are published in dependency order.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # Manual fallback: run on the tag ref (pub.dev checks that the OIDC token's
+  # ref matches the tag pattern, so pick the tag, not a branch).
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - name: Install dependencies
+        run: dart pub get
+      # tagpr maintains a single CHANGELOG.md at the repository root; pub.dev
+      # expects one per package.
+      - name: Copy CHANGELOG.md into each package
+        run: |
+          for pkg in tinygo_annotations wio_terminal dart2tinygo; do
+            cp CHANGELOG.md packages/$pkg/CHANGELOG.md
+          done
+      - name: Publish tinygo_annotations
+        working-directory: packages/tinygo_annotations
+        run: dart pub publish --force
+      - name: Publish wio_terminal
+        working-directory: packages/wio_terminal
+        run: dart pub publish --force
+      - name: Publish dart2tinygo
+        working-directory: packages/dart2tinygo
+        run: dart pub publish --force

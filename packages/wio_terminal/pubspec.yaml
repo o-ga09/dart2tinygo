@@ -4,8 +4,8 @@ description: >-
   @GoImport / @GoName / @GoType annotations only; the TinyGo runtime package
   ships in go/ and is wired up by the generated go.mod.
 version: 0.0.0
-publish_to: none
 repository: https://github.com/o-ga09/dart2tinygo
+issue_tracker: https://github.com/o-ga09/dart2tinygo/issues
 topics:
   - embedded
   - tinygo

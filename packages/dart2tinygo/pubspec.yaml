@@ -3,8 +3,8 @@ description: >-
   Transpiles a subset of Dart into TinyGo source code so it can run on
   microcontrollers. CLI (`dart2tinygo build/check`) plus the conversion engine.
 version: 0.0.0
-publish_to: none
 repository: https://github.com/o-ga09/dart2tinygo
+issue_tracker: https://github.com/o-ga09/dart2tinygo/issues
 topics:
   - embedded
   - tinygo
@@ -13,6 +13,9 @@ topics:
 environment:
   sdk: ^3.6.0
 resolution: workspace
+
+executables:
+  dart2tinygo:
 
 dependencies:
   analyzer: ^12.1.0

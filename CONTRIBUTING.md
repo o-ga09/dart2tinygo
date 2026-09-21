@@ -36,3 +36,7 @@ This project is an OSS transpiler that converts a subset of Dart into TinyGo sou
 
 - Make sure `dart analyze` / `dart test` pass. The repository is a pub workspace: run `dart pub get` once at the root, then `dart analyze` there and `dart test` in `packages/dart2tinygo`.
 - Check that the relevant `docs/` files are updated.
+
+## Releasing
+
+Releases are cut by tagpr from `main` and published to pub.dev by GitHub Actions; see [`docs/releasing.md`](./docs/releasing.md).

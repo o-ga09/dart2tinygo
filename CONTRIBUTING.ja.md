@@ -36,3 +36,7 @@
 
 - `dart analyze` / `dart test` が通ることを確認する。リポジトリは pub workspace なので、ルートで一度 `dart pub get` してから、ルートで `dart analyze`、`packages/dart2tinygo` で `dart test` を実行する。
 - 対応する `docs/` の更新漏れがないか確認する。
+
+## リリース
+
+リリースは tagpr が `main` から切り、GitHub Actions が pub.dev に公開します。[`docs/releasing.ja.md`](./docs/releasing.ja.md) を参照してください。

@@ -86,6 +86,7 @@ docs/                  # 対応機能表・変換ルール・バインディン�
 - [対応言語機能](./docs/supported_features.ja.md)
 - [Dart → Go 変換ルール](./docs/mapping.ja.md)
 - [バインディングの作り方](./docs/writing_bindings.ja.md)
+- [リリース手順](./docs/releasing.ja.md)
 
 ## Contributing
 

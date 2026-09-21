@@ -87,6 +87,7 @@ docs/                   # Supported features, conversion rules, how to write bin
 - [Supported language features](./docs/supported_features.md)
 - [Dart → Go conversion rules](./docs/mapping.md)
 - [Writing bindings](./docs/writing_bindings.md)
+- [Releasing](./docs/releasing.md)
 
 ## Contributing
 
