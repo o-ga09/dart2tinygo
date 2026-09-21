@@ -51,7 +51,15 @@ done
 が発行する OIDC トークンで認証します。pub.dev の認証情報をリポジトリに置く必要は
 ありません。
 
-### 3. タグで `publish.yml` を起動できるようにする
+### 3. tagpr が PR を作れるようにする
+
+デフォルトの `GITHUB_TOKEN` では、**Settings → Actions → General → Workflow
+permissions → Allow GitHub Actions to create and approve pull requests** を
+チェックするまで、ワークフローからの PR 作成は拒否されます
+（"GitHub Actions is not permitted to create or approve pull requests"）。
+次の手順の `TAGPR_GITHUB_TOKEN`（PAT）を使う場合はこの設定の影響を受けません。
+
+### 4. タグで `publish.yml` を起動できるようにする
 
 デフォルトの `GITHUB_TOKEN` で push されたタグでは GitHub はワークフローを起動
 しません。このリポジトリ用の fine-grained personal access token を

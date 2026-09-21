@@ -53,7 +53,15 @@ For each of the three packages, open **Admin** on pub.dev and under
 provisions when the job has `id-token: write`; no pub.dev credentials are
 stored in the repository.
 
-### 3. Let the tag trigger `publish.yml`
+### 3. Let tagpr open pull requests
+
+With the default `GITHUB_TOKEN`, GitHub refuses PR creation from workflows
+("GitHub Actions is not permitted to create or approve pull requests") until
+**Settings → Actions → General → Workflow permissions →
+Allow GitHub Actions to create and approve pull requests** is checked. The
+`TAGPR_GITHUB_TOKEN` PAT from the next step is not subject to this setting.
+
+### 4. Let the tag trigger `publish.yml`
 
 GitHub does not run workflows for tags pushed with the default `GITHUB_TOKEN`.
 Create a fine-grained personal access token for this repository with
