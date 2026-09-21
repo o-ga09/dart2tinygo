@@ -1,0 +1,11 @@
+name: hello_wioterminal
+description: Shows "Hello From Dart !" on the Wio Terminal's LCD via dart2tinygo.
+version: 0.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  wio_terminal:
+    path: ../../packages/wio_terminal

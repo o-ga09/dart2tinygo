@@ -50,3 +50,14 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }}
         working-directory: /tmp/dart2tinygo-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Board-specific examples only build for their own target.
+      - name: dart2tinygo build (examples/hello_wioterminal)
+        if: matrix.target == 'wioterminal'
+        run: |
+          dart pub get -C examples/hello_wioterminal
+          cd packages/dart2tinygo
+          dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart -o /tmp/dart2tinygo-hello-out
+      - name: tinygo build examples/hello_wioterminal
+        if: matrix.target == 'wioterminal'
+        working-directory: /tmp/dart2tinygo-hello-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
