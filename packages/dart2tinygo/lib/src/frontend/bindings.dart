@@ -1,0 +1,146 @@
+import 'dart:io';
+
+import 'package:analyzer/dart/constant/value.dart';
+import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart';
+import 'package:path/path.dart' as p;
+
+/// Reads the `@GoImport` / `@GoName` / `@GoType` annotations that binding
+/// packages declare with `package:tinygo_annotations`.
+///
+/// This is the only place the core knows about bindings, and it is
+/// board-agnostic by construction: it never looks at *which* Go package is
+/// bound, only at how the annotations describe it.
+const _annotationsLibraryUri =
+    'package:tinygo_annotations/tinygo_annotations.dart';
+
+/// A Go import declared by `@GoImport(path, alias: ...)` on a binding library.
+class GoImportSpec {
+  GoImportSpec({required this.path, this.alias, this.localModule});
+
+  /// The Go import path.
+  final String path;
+
+  /// The import alias, or `null` to let Go use the package name.
+  final String? alias;
+
+  /// When the binding's Dart package ships its Go runtime in a `go/`
+  /// directory next to `pubspec.yaml`, the module it declares, so the
+  /// generated `go.mod` can `replace` it with the local checkout.
+  final GoLocalModule? localModule;
+
+  /// The identifier the generated Go code uses to refer to this package.
+  String get packageName => alias ?? p.url.basename(path);
+}
+
+/// A Go module found at [directory] (declaring [modulePath]).
+class GoLocalModule {
+  GoLocalModule({required this.modulePath, required this.directory});
+
+  final String modulePath;
+  final String directory;
+}
+
+/// The Go-side counterpart of an `external` Dart declaration.
+class GoBinding {
+  GoBinding({required this.goName, required this.import});
+
+  /// The Go call target: package-qualified (`wio.NewDisplay`) for top-level
+  /// functions, bare (`DrawText`) for methods.
+  final String goName;
+
+  /// The `@GoImport` of the library that declares the binding.
+  final GoImportSpec import;
+}
+
+/// Returns the `@GoImport` on [library], or `null` if it has none.
+GoImportSpec? goImportOf(LibraryElement library) {
+  final value = _annotationValue(library.metadata, 'GoImport');
+  if (value == null) return null;
+  final path = value.getField('path')?.toStringValue();
+  if (path == null) return null;
+  final alias = value.getField('alias')?.toStringValue();
+  return GoImportSpec(
+    path: path,
+    alias: alias,
+    localModule: _findLocalModule(library),
+  );
+}
+
+/// Returns the `@GoName` on [element], or `null` if it has none.
+String? goNameOf(Element element) =>
+    _annotationValue(element.metadata, 'GoName')
+        ?.getField('name')
+        ?.toStringValue();
+
+/// Returns the `@GoType` on [element], or `null` if it has none.
+String? goTypeOf(Element element) =>
+    _annotationValue(element.metadata, 'GoType')
+        ?.getField('name')
+        ?.toStringValue();
+
+/// Whether [type] is a Dart class annotated with `@GoType`.
+bool isGoType(DartType? type) {
+  if (type is! InterfaceType) return false;
+  return goTypeOf(type.element) != null;
+}
+
+/// Resolves [element] (an `external` top-level function or method) to its
+/// Go binding, or `null` when it isn't a complete binding: it must be
+/// `external`, carry `@GoName`, and live in a library with `@GoImport`.
+GoBinding? goBindingOf(ExecutableElement element) {
+  if (!element.isExternal) return null;
+  final goName = goNameOf(element);
+  if (goName == null) return null;
+  final library = element.library;
+  final import = goImportOf(library);
+  if (import == null) return null;
+  return GoBinding(goName: goName, import: import);
+}
+
+DartObject? _annotationValue(Metadata metadata, String className) {
+  for (final annotation in metadata.annotations) {
+    final value = annotation.computeConstantValue();
+    final type = value?.type;
+    if (type is! InterfaceType) continue;
+    final element = type.element;
+    if (element.name == className &&
+        element.library.uri.toString() == _annotationsLibraryUri) {
+      return value;
+    }
+  }
+  return null;
+}
+
+/// Looks for `<package root>/go/go.mod` next to the `pubspec.yaml` of the
+/// package that declares [library]. This is a convention, not configuration:
+/// a binding that ships its Go runtime in-tree gets a `replace` directive so
+/// examples build straight from a checkout, and one that doesn't is left to
+/// `go mod tidy` to fetch normally.
+GoLocalModule? _findLocalModule(LibraryElement library) {
+  final sourcePath = library.firstFragment.source.fullName;
+  var dir = p.dirname(sourcePath);
+  while (true) {
+    if (File(p.join(dir, 'pubspec.yaml')).existsSync()) {
+      final goDir = p.join(dir, 'go');
+      final goMod = File(p.join(goDir, 'go.mod'));
+      if (!goMod.existsSync()) return null;
+      final modulePath = _moduleLine(goMod.readAsStringSync());
+      if (modulePath == null) return null;
+      return GoLocalModule(modulePath: modulePath, directory: goDir);
+    }
+    final parent = p.dirname(dir);
+    if (parent == dir) return null;
+    dir = parent;
+  }
+}
+
+String? _moduleLine(String goModSource) {
+  for (final line in goModSource.split('\n')) {
+    final trimmed = line.trim();
+    if (trimmed.startsWith('module ')) {
+      return trimmed.substring('module '.length).trim();
+    }
+  }
+  return null;
+}

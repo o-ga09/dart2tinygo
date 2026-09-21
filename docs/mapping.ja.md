@@ -23,6 +23,23 @@
 
 生成コードで実際に使う場合のみ Go の import（`strconv`、`time`）を出力する。
 
+## 注釈バインディング（決定・実装済み）
+
+`@GoName` 宣言（[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照）への呼び出しは
+Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを足すことはない。
+
+| Dart | Go |
+| --- | --- |
+| バインディングライブラリの `@GoImport('pkg/path', alias: 'p')` | `import p "pkg/path"`（そのライブラリのバインディングを使った場合のみ。`alias` なしなら `import "pkg/path"`） |
+| `final d = newDisplay();`（`newDisplay` が `@GoName('wio.NewDisplay')`） | `d := wio.NewDisplay()`（`final`/`var` の違いはなし。`@GoType` は Go 側の型推論に任せる） |
+| `beep(3);`（`beep` が `@GoName('rt.Beep')`） | `rt.Beep(3)` |
+| `d.drawText(10, 20, 'hi');`（`drawText` が `@GoName('DrawText')`） | `d.DrawText(10, 20, "hi")` |
+| 引数: `int` リテラル / `String` リテラル / `int` ローカル変数 | そのまま出力：型なし定数 / Go 文字列リテラル / 識別子 |
+
+生成する `go.mod`：Dart パッケージに `go/go.mod` を同梱しているバインディングごとに
+`require <module> v0.0.0` と `replace <module> => <ローカル絶対パス>` を出力し、
+続けて `go mod tidy` を実行する。それ以外は `go mod tidy` に任せる。
+
 ## 数値の意味論（要決定）
 
 - Dart の `int` は64ビット想定。Go 側で `int64` を使うか `int` を使うかは未決定。

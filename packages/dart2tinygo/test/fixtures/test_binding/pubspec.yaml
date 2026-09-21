@@ -1,0 +1,13 @@
+name: test_binding
+description: >
+  A board-agnostic fake binding used by the dart2tinygo test suite to exercise
+  @GoImport / @GoName / @GoType without depending on any real board package.
+version: 0.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  tinygo_annotations:
+    path: ../../../../tinygo_annotations

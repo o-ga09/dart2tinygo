@@ -21,3 +21,7 @@ dependencies:
 dev_dependencies:
   test: ^1.25.0
   lints: ^5.0.0
+  # Board-agnostic fake binding for golden/checker tests; the core itself
+  # never depends on a real board package.
+  test_binding:
+    path: test/fixtures/test_binding

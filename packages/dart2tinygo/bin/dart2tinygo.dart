@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:dart2tinygo/src/backend/generator.dart';
 import 'package:dart2tinygo/src/checker/checker.dart';
+import 'package:dart2tinygo/src/frontend/bindings.dart';
 import 'package:dart2tinygo/src/frontend/resolve.dart';
 import 'package:path/path.dart' as p;
 
@@ -99,9 +100,18 @@ class BuildCommand extends Command<int> {
 
     final moduleName = _moduleNameFor(entry);
     final goModPath = p.join(outDirAbs.path, 'go.mod');
-    File(goModPath).writeAsStringSync('module $moduleName\n\ngo 1.21\n');
+    File(goModPath).writeAsStringSync(
+      _goModSource(moduleName, generated.localModules),
+    );
 
     print('dart2tinygo: wrote $mainGoPath and $goModPath');
+
+    if (generated.localModules.isNotEmpty) {
+      // Bindings pull in third-party Go modules (drivers, fonts, ...), and
+      // `tinygo build` needs them recorded in go.sum before it will build.
+      final tidy = await _goModTidy(outDirAbs.path);
+      if (tidy != 0) return tidy;
+    }
     return 0;
   }
 }
@@ -138,10 +148,57 @@ String? _requireEntryArg(ArgResults results) {
   return results.rest.single;
 }
 
+/// Go module name for the generated `go.mod`. Named after the entry file,
+/// except that `main.dart` takes its directory's name so `examples/foo/
+/// main.dart` becomes module `foo` rather than the meaningless `main`.
 String _moduleNameFor(String entryPath) {
-  final base = p.basenameWithoutExtension(entryPath);
+  var base = p.basenameWithoutExtension(entryPath);
+  if (base == 'main') {
+    base = p.basename(p.dirname(p.absolute(entryPath)));
+  }
   final sanitized = base.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
   return sanitized.isEmpty ? 'app' : sanitized;
+}
+
+/// Binding runtimes that live in-tree next to their Dart package get a
+/// `require` pinned to a placeholder version plus a `replace` to the local
+/// directory, so the output builds from a checkout. Anything else is left
+/// for `go mod tidy` to resolve.
+String _goModSource(String moduleName, List<GoLocalModule> localModules) {
+  final out = StringBuffer()
+    ..writeln('module $moduleName')
+    ..writeln()
+    ..writeln('go 1.21');
+  for (final module in localModules) {
+    out
+      ..writeln()
+      ..writeln('require ${module.modulePath} v0.0.0')
+      ..writeln()
+      ..writeln('replace ${module.modulePath} => ${module.directory}');
+  }
+  return out.toString();
+}
+
+Future<int> _goModTidy(String dir) async {
+  try {
+    final process = await Process.start(
+      'go',
+      ['mod', 'tidy'],
+      workingDirectory: dir,
+      mode: ProcessStartMode.inheritStdio,
+    );
+    final code = await process.exitCode;
+    if (code != 0) {
+      stderr.writeln('dart2tinygo: `go mod tidy` failed in $dir');
+    }
+    return code;
+  } on ProcessException {
+    stderr.writeln(
+      'dart2tinygo: `go` was not found on PATH; run `go mod tidy` in $dir '
+      'before `tinygo build` (install: https://go.dev/doc/install)',
+    );
+    return 1;
+  }
 }
 
 /// Best-effort `gofmt`, matching `HANDOFF_dart2tinygo.md` §4.2 ("生成コードは

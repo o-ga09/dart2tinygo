@@ -1,5 +1,7 @@
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/element/element.dart';
+import 'package:dart2tinygo/src/frontend/bindings.dart';
 
 /// The result of converting a checked entry point to Go source, per
 /// `HANDOFF_dart2tinygo.md` §4.2/§4.4: no `fmt.Sprintf`, string
@@ -9,9 +11,27 @@ import 'package:analyzer/dart/ast/ast.dart';
 /// no [UnsupportedSyntaxError]s; this generator assumes the AST matches the
 /// v0.1 minimal subset and does not re-validate it.
 class GeneratedGoFile {
-  GeneratedGoFile(this.source);
+  GeneratedGoFile(this.source, {this.localModules = const []});
 
   final String source;
+
+  /// Binding Go modules that live next to their Dart package (see
+  /// `GoImportSpec.localModule`). The CLI turns each into a `require` +
+  /// `replace` pair in the generated `go.mod` so the output builds from a
+  /// checkout without publishing anything.
+  final List<GoLocalModule> localModules;
+}
+
+/// Everything the generated file needs from outside itself, collected while
+/// walking `main()`.
+class GoDeps {
+  /// Go imports keyed by import path. The value is the alias (`null` for
+  /// stdlib packages and for bindings that rely on the package's own name).
+  final imports = <String, String?>{};
+
+  /// Binding modules with an in-tree Go runtime, keyed by module path so a
+  /// binding used many times is required once.
+  final localModules = <String, GoLocalModule>{};
 }
 
 /// Converts the `main()` function of a checked [ResolvedUnitResult] into a
@@ -22,10 +42,11 @@ GeneratedGoFile generateGoFile(ResolvedUnitResult result) {
       .firstWhere((d) => d.name.lexeme == 'main');
   final body = (mainDecl.functionExpression.body as BlockFunctionBody).block;
 
-  final imports = <String>{};
+  final deps = GoDeps();
+  final imports = deps.imports;
   final bodyBuffer = StringBuffer();
   for (final statement in body.statements) {
-    _writeStatement(statement, bodyBuffer, imports, indent: '\t');
+    _writeStatement(statement, bodyBuffer, deps, indent: '\t');
   }
 
   final out = StringBuffer()
@@ -33,13 +54,18 @@ GeneratedGoFile generateGoFile(ResolvedUnitResult result) {
     ..writeln('package main')
     ..writeln();
   if (imports.isNotEmpty) {
-    final sorted = imports.toList()..sort();
+    final sorted = imports.keys.toList()..sort();
+    String spec(String path) {
+      final alias = imports[path];
+      return alias == null ? '"$path"' : '$alias "$path"';
+    }
+
     if (sorted.length == 1) {
-      out.writeln('import "${sorted.single}"');
+      out.writeln('import ${spec(sorted.single)}');
     } else {
       out.writeln('import (');
       for (final import in sorted) {
-        out.writeln('\t"$import"');
+        out.writeln('\t${spec(import)}');
       }
       out.writeln(')');
     }
@@ -50,31 +76,34 @@ GeneratedGoFile generateGoFile(ResolvedUnitResult result) {
     ..write(bodyBuffer)
     ..writeln('}');
 
-  return GeneratedGoFile(out.toString());
+  return GeneratedGoFile(
+    out.toString(),
+    localModules: deps.localModules.values.toList(),
+  );
 }
 
 void _writeStatement(
   Statement statement,
   StringBuffer out,
-  Set<String> imports, {
+  GoDeps deps, {
   required String indent,
 }) {
   switch (statement) {
     case VariableDeclarationStatement():
       for (final variable in statement.variables.variables) {
-        final value = _writeExpression(variable.initializer!, imports);
+        final value = _writeExpression(variable.initializer!, deps);
         out.writeln('$indent${variable.name.lexeme} := $value');
       }
 
     case WhileStatement():
       out.writeln('${indent}for {');
       for (final inner in (statement.body as Block).statements) {
-        _writeStatement(inner, out, imports, indent: '$indent\t');
+        _writeStatement(inner, out, deps, indent: '$indent\t');
       }
       out.writeln('$indent}');
 
     case ExpressionStatement():
-      _writeExpressionStatement(statement.expression, out, imports,
+      _writeExpressionStatement(statement.expression, out, deps,
           indent: indent);
 
     default:
@@ -88,7 +117,7 @@ void _writeStatement(
 void _writeExpressionStatement(
   Expression expression,
   StringBuffer out,
-  Set<String> imports, {
+  GoDeps deps, {
   required String indent,
 }) {
   if (expression is PostfixExpression) {
@@ -98,20 +127,27 @@ void _writeExpressionStatement(
   }
 
   if (expression is MethodInvocation) {
-    switch (expression.methodName.name) {
-      case 'print':
-        final arg = _writePrintArgument(
-            expression.argumentList.arguments.single, imports);
-        out.writeln('${indent}println($arg)');
-        return;
-      case 'sleep':
-        imports.add('time');
-        final duration = _writeDurationExpression(
-          expression.argumentList.arguments.single
-              as InstanceCreationExpression,
-        );
-        out.writeln('${indent}time.Sleep($duration)');
-        return;
+    if (expression.target == null) {
+      switch (expression.methodName.name) {
+        case 'print':
+          final arg = _writePrintArgument(
+              expression.argumentList.arguments.single, deps);
+          out.writeln('${indent}println($arg)');
+          return;
+        case 'sleep':
+          deps.imports['time'] = null;
+          final duration = _writeDurationExpression(
+            expression.argumentList.arguments.single
+                as InstanceCreationExpression,
+          );
+          out.writeln('${indent}time.Sleep($duration)');
+          return;
+      }
+    }
+    final bound = _writeBoundCall(expression, deps);
+    if (bound != null) {
+      out.writeln('$indent$bound');
+      return;
     }
   }
 
@@ -122,7 +158,7 @@ void _writeExpressionStatement(
   );
 }
 
-String _writePrintArgument(Expression argument, Set<String> imports) {
+String _writePrintArgument(Expression argument, GoDeps deps) {
   if (argument is SimpleStringLiteral) {
     return _goStringLiteral(argument.value);
   }
@@ -134,7 +170,7 @@ String _writePrintArgument(Expression argument, Set<String> imports) {
           parts.add(_goStringLiteral(element.value));
         }
       } else if (element is InterpolationExpression) {
-        imports.add('strconv');
+        deps.imports['strconv'] = null;
         final name = (element.expression as SimpleIdentifier).name;
         parts.add('strconv.Itoa($name)');
       }
@@ -169,14 +205,50 @@ String _writeDurationExpression(InstanceCreationExpression creation) {
   return terms.join(' + ');
 }
 
-String _writeExpression(Expression expression, Set<String> imports) {
+String _writeExpression(Expression expression, GoDeps deps) {
   if (expression is IntegerLiteral) {
     return '${expression.value}';
+  }
+  if (expression is SimpleStringLiteral) {
+    return _goStringLiteral(expression.value);
   }
   if (expression is SimpleIdentifier) {
     return expression.name;
   }
+  if (expression is MethodInvocation) {
+    final bound = _writeBoundCall(expression, deps);
+    if (bound != null) return bound;
+  }
   throw StateError('unchecked expression: ${expression.runtimeType}');
+}
+
+/// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes
+/// `<goName>(args)` (the name is already package-qualified, e.g.
+/// `wio.NewDisplay`), a method binding becomes `<receiver>.<goName>(args)`.
+/// The binding library's `@GoImport` is recorded so the import block and,
+/// for in-tree runtimes, the `go.mod` `replace` are emitted. Recorded in
+/// `docs/mapping.md`.
+String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
+  final callee = call.methodName.element;
+  if (callee is! ExecutableElement) return null;
+  final binding = goBindingOf(callee);
+  if (binding == null) return null;
+
+  final import = binding.import;
+  deps.imports[import.path] = import.alias;
+  final local = import.localModule;
+  if (local != null) {
+    deps.localModules[local.modulePath] = local;
+  }
+
+  final args = call.argumentList.arguments
+      .map((arg) => _writeExpression(arg, deps))
+      .join(', ');
+  final target = call.target;
+  if (target == null) {
+    return '${binding.goName}($args)';
+  }
+  return '${(target as SimpleIdentifier).name}.${binding.goName}($args)';
 }
 
 String _goStringLiteral(String content) {

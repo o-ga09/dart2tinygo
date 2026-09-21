@@ -26,6 +26,28 @@ void main() {
     return checkEntryPoint(result);
   }
 
+  /// Like [checkSource], but the file lives inside this package so
+  /// `package:test_binding` (a dev dependency) resolves.
+  late Directory inPackageDir;
+
+  setUp(() {
+    inPackageDir = Directory(p.join('test', '.tmp'))
+      ..createSync(recursive: true);
+    inPackageDir = inPackageDir.createTempSync('checker_test');
+  });
+
+  tearDown(() {
+    inPackageDir.deleteSync(recursive: true);
+  });
+
+  Future<List<UnsupportedSyntaxError>> checkBindingSource(
+    String source,
+  ) async {
+    final path = p.join(inPackageDir.path, 'entry.dart');
+    File(path).writeAsStringSync(source);
+    final result = await resolveEntryPoint(path);
+    return checkEntryPoint(result);
+  }
 
   test('accepts the v0.1 minimal subset', () async {
     final errors = await checkSource('''
@@ -66,6 +88,64 @@ void main() {
 ''');
     expect(errors, isNotEmpty);
     expect(errors.first.reason, contains('int locals'));
+  });
+
+  group('annotation bindings', () {
+    test('accepts @GoName calls on @GoType locals and top-level functions',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  var n = 2;
+  widget.show(1, 2, 'hi');
+  beep(n);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports external functions without @GoName', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  unnamed();
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.line, 4);
+      expect(errors.single.reason, contains('no @GoName annotation'));
+    });
+
+    test('reports unsupported binding-call arguments', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  widget.show(1, 2, 'a' + 'b');
+  beep(1 + 2);
+}
+''');
+      expect(errors, hasLength(2));
+      expect(errors[0].line, 5);
+      expect(errors[0].reason, contains('argument must be an int literal'));
+      expect(errors[1].line, 6);
+    });
+
+    test('reports binding methods called on non-local receivers', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  newWidget().hide();
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('local variable'));
+    });
   });
 
   test('reports missing main()', () async {
