@@ -1,8 +1,8 @@
 name: wio_terminal
-description: >
-  Seeed Wio Terminal 向けの dart2tinygo バインディング（LCD など）。
-  Dart 側は @GoImport / @GoName / @GoType の注釈のみ、実体は go/ 配下の
-  TinyGo ランタイムパッケージ。
+description: >-
+  dart2tinygo binding for the Seeed Wio Terminal (LCD text). The Dart side is
+  @GoImport / @GoName / @GoType annotations only; the TinyGo runtime package
+  ships in go/ and is wired up by the generated go.mod.
 version: 0.0.0
 publish_to: none
 repository: https://github.com/o-ga09/dart2tinygo
@@ -13,8 +13,10 @@ topics:
   - wioterminal
 
 environment:
-  sdk: ^3.0.0
+  sdk: ^3.6.0
+resolution: workspace
 
 dependencies:
-  tinygo_annotations:
-    path: ../tinygo_annotations
+  # Kept in lockstep with this package's own version by tool/sync_versions.dart
+  # (run by tagpr on every release).
+  tinygo_annotations: ^0.0.0

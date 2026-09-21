@@ -57,7 +57,7 @@ func main() {
 ```
 
 ```sh
-cd examples/hello_wioterminal && dart pub get && cd ../..
+dart pub get   # once, at the repository root (pub workspace)
 cd packages/dart2tinygo
 dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart -o ../../examples/hello_wioterminal/build
 cd ../../examples/hello_wioterminal/build

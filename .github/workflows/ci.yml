@@ -19,8 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
+      # Pub workspace: one `dart pub get` at the root resolves every package.
       - name: Install dependencies
-        working-directory: ${{ matrix.package }}
         run: dart pub get
       - name: Analyze
         working-directory: ${{ matrix.package }}
@@ -53,7 +53,6 @@ jobs:
         with:
           tinygo-version: "0.42.0"
       - name: Install dependencies
-        working-directory: packages/dart2tinygo
         run: dart pub get
       - name: dart2tinygo build (v0.1 minimal golden case)
         working-directory: packages/dart2tinygo
@@ -65,7 +64,6 @@ jobs:
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'
         run: |
-          dart pub get -C examples/hello_wioterminal
           cd packages/dart2tinygo
           dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart -o /tmp/dart2tinygo-hello-out
       - name: tinygo build examples/hello_wioterminal

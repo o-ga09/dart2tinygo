@@ -4,8 +4,10 @@ version: 0.0.0
 publish_to: none
 
 environment:
-  sdk: ^3.0.0
+  sdk: ^3.6.0
+resolution: workspace
 
 dependencies:
-  wio_terminal:
-    path: ../../packages/wio_terminal
+  # Resolved to ../../packages/wio_terminal by the workspace. Outside this
+  # repository, depend on the published package instead.
+  wio_terminal: ^0.0.0

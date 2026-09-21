@@ -29,12 +29,11 @@ void main() {
 ## 実行手順
 
 ```sh
-# 1. サンプルの依存解決（初回のみ）
-cd examples/hello_wioterminal
+# 1. 依存解決（初回のみ。リポジトリルートで実行 — pub workspace）
 dart pub get
 
 # 2. Go に変換（main.go と go.mod を書き出し、続けて `go mod tidy` を実行）
-cd ../../packages/dart2tinygo
+cd packages/dart2tinygo
 dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart \
   -o ../../examples/hello_wioterminal/build
 

@@ -1,0 +1,17 @@
+# Pub workspace root (Dart >= 3.6). Run `dart pub get` here once; every member
+# below then resolves against a single lockfile, and members that depend on
+# each other (e.g. wio_terminal -> tinygo_annotations) resolve to the in-tree
+# package while keeping publishable hosted constraints in their own pubspec.
+name: dart2tinygo_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  - packages/dart2tinygo
+  - packages/tinygo_annotations
+  - packages/tinygo_machine
+  - packages/wio_terminal
+  - packages/dart2tinygo/test/fixtures/test_binding
+  - examples/hello_wioterminal

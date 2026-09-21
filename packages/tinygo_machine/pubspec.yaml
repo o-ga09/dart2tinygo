@@ -1,7 +1,7 @@
 name: tinygo_machine
-description: >
-  TinyGo 共通 machine パッケージ（GPIO, time, LED など）のボード非依存バインディング。
-  現時点では実装なし（スケルトンのみ）。
+description: >-
+  Board-agnostic dart2tinygo bindings for TinyGo's common machine package
+  (GPIO, time, LED, ...). Skeleton only; not published yet.
 version: 0.0.0
 publish_to: none
 repository: https://github.com/o-ga09/dart2tinygo
@@ -11,4 +11,5 @@ topics:
   - microcontroller
 
 environment:
-  sdk: ^3.0.0
+  sdk: ^3.6.0
+resolution: workspace

@@ -34,5 +34,5 @@
 
 ## PR を出す前に
 
-- `dart analyze` / `dart test` が通ることを確認する。
+- `dart analyze` / `dart test` が通ることを確認する。リポジトリは pub workspace なので、ルートで一度 `dart pub get` してから、ルートで `dart analyze`、`packages/dart2tinygo` で `dart test` を実行する。
 - 対応する `docs/` の更新漏れがないか確認する。

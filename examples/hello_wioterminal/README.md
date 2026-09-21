@@ -29,12 +29,11 @@ void main() {
 ## Run
 
 ```sh
-# 1. Resolve the example's dependencies (once)
-cd examples/hello_wioterminal
+# 1. Resolve dependencies (once, at the repository root — it is a pub workspace)
 dart pub get
 
 # 2. Convert to Go (writes main.go and go.mod, then runs `go mod tidy`)
-cd ../../packages/dart2tinygo
+cd packages/dart2tinygo
 dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart \
   -o ../../examples/hello_wioterminal/build
 
