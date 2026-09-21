@@ -1,0 +1,32 @@
+name: tagpr
+
+# Release flow (see docs/releasing.md):
+#   push to main -> tagpr opens/updates a "release vX.Y.Z" PR (bumping every
+#   pubspec + CHANGELOG.md) -> merging it tags vX.Y.Z and creates the GitHub
+#   Release -> the tag push runs publish.yml.
+#
+# The tag must be pushed with a token other than the default GITHUB_TOKEN,
+# otherwise GitHub does not trigger publish.yml for it. Add a fine-grained PAT
+# (contents: write, pull-requests: write) as the TAGPR_GITHUB_TOKEN secret; the
+# fallback to GITHUB_TOKEN keeps release PRs working before that is set up, at
+# the cost of having to run publish.yml manually.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  tagpr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TAGPR_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      # tagpr's postVersionCommand runs tool/sync_versions.dart.
+      - uses: dart-lang/setup-dart@v1
+      - uses: Songmu/tagpr@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAGPR_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}

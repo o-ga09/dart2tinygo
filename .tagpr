@@ -1,0 +1,14 @@
+# config file for the tagpr in git config format
+# https://github.com/Songmu/tagpr
+#
+# All packages in this repository are versioned in lockstep: one tag (vX.Y.Z)
+# bumps every pubspec below, and tool/sync_versions.dart rewrites the
+# constraints between them to match. The release PR gets a `minor` / `major`
+# label to bump beyond the default patch increment.
+[tagpr]
+	vPrefix = true
+	releaseBranch = main
+	versionFile = packages/dart2tinygo/pubspec.yaml,packages/tinygo_annotations/pubspec.yaml,packages/tinygo_machine/pubspec.yaml,packages/wio_terminal/pubspec.yaml,packages/dart2tinygo/test/fixtures/test_binding/pubspec.yaml
+	postVersionCommand = dart tool/sync_versions.dart
+	changelog = true
+	release = true
