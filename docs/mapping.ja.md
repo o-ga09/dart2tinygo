@@ -40,21 +40,53 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 `require <module> v0.0.0` と `replace <module> => <ローカル絶対パス>` を出力し、
 続けて `go mod tidy` を実行する。それ以外は `go mod tidy` に任せる。
 
-## 数値の意味論（要決定）
+## 数値の意味論（2026-09-22 決定。`int` リテラル以外は未実装）
 
-- Dart の `int` は64ビット想定。Go 側で `int64` を使うか `int` を使うかは未決定。
-- 32bit MCU では Go の `int` は32ビットになる点に注意（要検討）。
-- dart2js（Flutter Web）ではビット演算が32ビットになるため、Flutter と共通コードを書く利用者向けの注意喚起を README に追加する必要がある（未着手）。
-- 上記 v0.1 最小変換は `int` リテラルを Go の型なし定数として出力するだけ（`x := 0`）なので、この論点はまだ顕在化していない。より広い `int` 対応を入れる前に決定が必要。
+- **`int` → Go の `int`**（プラットフォーム幅。SAMD51 などの 32bit MCU では 32bit で、32bit で桁あふれする）。
+  理由：Dart 自身が Web（dart2js のビット演算は 32bit）でプラットフォーム依存の整数意味論を
+  許容している前例があること、バインディングが境界ごとの変換なしに Go の慣用的な `int` を
+  使えること、Cortex-M では 64bit 演算がソフトウェア実装になること。dart2js 利用者が知っている
+  のと同じ注意書きを README に載せる。
+- **`double` → `float64`**。サイズより正しさ。Dart に 32bit double の前例はなく、単精度 FPU 上で
+  ソフト実装の double が遅いことより、精度が無言で落ちることの方が悪い。
+- 整数リテラルは Go の型なし定数のまま（`x := 0`）。
+- `~/` → Go の `/`（どちらも 0 方向への切り捨て）。`%` は異なる（Dart `-5 % 3 == 1`、Go は `-2`）
+  ので下記ランタイムヘルパを経由する。
 
-## 型対応表（上記 v0.1 最小変換の範囲を超えては未定義）
+## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
-| Dart | Go |
-| --- | --- |
-| （未定） | （未定） |
+| Dart | Go | 状態 |
+| --- | --- | --- |
+| `int` | `int` | 実装済（リテラル／ローカル変数） |
+| `double` | `float64` | 決定 |
+| `bool` | `bool` | 決定 |
+| `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 決定 |
+| `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
+| `List<T>` | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
+| `enum` | `type E int` + `const ( ... iota )`。`.index` は値そのもの、`.name` は文字列テーブル | 決定（v0.2） |
+| クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） | 決定（v0.2） |
+| トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 | 決定 |
+| `if` / `while` / `for (;;)` / `for-in` / `switch` / `break` / `continue` | そのまま対応。`for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
+| カスケード `a..b()..c()` | 一時変数 + 文の列 | 決定 |
+| `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |
+| 継承・mixin・ジェネリクス・`T?`・`throw`/例外・`async` | checker が拒否 | 決定（将来） |
 
-## 文字列補間（`int` は実装済み、それ以外は方針のみ）
+## 共通 Go ランタイム（`dartrt`、2026-09-22 決定、未実装）
 
-- `fmt.Sprintf` は使わない。型に応じて `strconv` 等で連結し、TinyGo でのバイナリ肥大化を防ぐ。
-- 実装済み：`int` 型の補間式を `strconv.Itoa` で変換。
-- 未実装：`double` / `bool` / `String` および任意の式の補間。
+Go の式一つで表せない意味論は、`packages/dart2tinygo/go/` の小さなボード非依存 Go モジュール
+（module `github.com/o-ga09/dart2tinygo/packages/dart2tinygo/go`、import 名 `dartrt`）を経由する。
+配布と接続はバインディングの `go/` と同じ規約（[`writing_bindings.ja.md`](./writing_bindings.ja.md)
+参照）。使ったときだけ import される。最初の中身：`FormatDouble`（Dart は `1.0` と出すが Go の
+`strconv.FormatFloat` は `1`）、`Mod`（Dart の `%`）。これは言語意味論でありボード知識ではないので、
+本体にボード固有コードを入れない原則には反しない。
+
+## 文字列補間（`int` は実装済み、それ以外は決定済み）
+
+- `fmt.Sprintf` は使わない。型に応じて `strconv` 等で連結する（TinyGo のバイナリ肥大化を防ぐため）。
+- 実装済み：`int` 型の補間式は `strconv.Itoa`。
+- 決定：`bool` → `strconv.FormatBool`、`double` → `dartrt.FormatDouble`、`String` → そのまま。ローカル変数だけでなく、これらの型の任意の式。
+
+## 生成する `go.mod`
+
+- `go 1.25`（TinyGo 0.42 の下限）。`go mod tidy` が必要に応じて上げる。
+- ツリー内 Go ランタイム（バインディング、`dartrt`）ごとに `require` + `replace` の組を 1 つ。

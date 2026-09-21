@@ -55,6 +55,22 @@ func (d *Display) DrawText(x, y int, text string) { /* ... */ }
 
 生成される Go は [`mapping.ja.md`](./mapping.ja.md) を参照。
 
+## 決定済み・未実装（2026-09-22）
+
+- **Go の多値返り値・`error`・ポインタ／値渡し・構造体の構築のために注釈は増やさない。**
+  バインディングの Go 側がアダプタになる：そうした API を単一の値を返す関数・メソッドに
+  包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
+  初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
+- **定数：** `external` なトップレベル getter／static getter に付けた `@GoName` は、呼び出し
+  括弧なしの Go 識別子に対応する。例 `@GoName('wio.Red') external Color get red;` → `wio.Red`。
+- **enum：** Dart の `enum` に `@GoType('machine.Pin')`、各値に `@GoName('machine.D0')` を付けられる。
+- **チェーンとカスケード**をバインディングの戻り値に対して許可
+  （`newDisplay().clear()`、`newDisplay()..clear()..drawText(...)`）。
+- **`@GoType` の値を引数に渡す**（ローカル変数・呼び出し結果をそのまま）。
+- `tinygo_machine` バインディングの最初の API は `Pin.led` / `Pin(n)` /
+  `configure(PinMode.output | PinMode.input)` / `high()` / `low()` / `toggle()` / `get()`。
+  `machine.LED` や `machine.PinConfig{...}` は最初のルールに従い Go 側で吸収する。
+
 ## Go ランタイムをバインディングに同梱する
 
 Go モジュールはバインディングの `pubspec.yaml` と同じ階層の `go/` ディレクトリに置きます（モジュールパスはそのディレクトリのリポジトリ上のパス。例: `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`）。パッケージに `go/go.mod` があるバインディングを使うと、トランスパイラは生成する `go.mod` に

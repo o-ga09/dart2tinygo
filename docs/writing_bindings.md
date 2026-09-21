@@ -55,6 +55,27 @@ func (d *Display) DrawText(x, y int, text string) { /* ... */ }
 
 See [`mapping.md`](./mapping.md) for the generated Go.
 
+## Decided, not yet implemented (2026-09-22)
+
+- **No new annotations for Go multi-value returns, `error`, pointers vs.
+  values, or struct construction.** The Go half of the binding is the
+  adapter: it wraps such APIs into single-value functions and methods
+  (errors become `panic` or a `bool` result), exactly as `wio.NewDisplay`
+  folds the ILI9341/SPI setup. `@GoType` names the exact Go type expression,
+  `*` included.
+- **Constants:** `@GoName` on an `external` top-level getter or static
+  getter maps to a bare Go identifier (no call), e.g.
+  `@GoName('wio.Red') external Color get red;` → `wio.Red`.
+- **Enums:** a Dart `enum` may carry `@GoType('machine.Pin')` with
+  `@GoName('machine.D0')` on each value.
+- **Chaining and cascades** on binding results (`newDisplay().clear()`,
+  `newDisplay()..clear()..drawText(...)`).
+- **`@GoType` values as arguments**, passed verbatim (locals or call results).
+- The `tinygo_machine` binding starts with `Pin.led` / `Pin(n)` /
+  `configure(PinMode.output | PinMode.input)` / `high()` / `low()` /
+  `toggle()` / `get()`; `machine.LED` and `machine.PinConfig{...}` are
+  absorbed by its Go half per the first rule.
+
 ## Shipping the Go runtime with the binding
 
 Put the Go module in a `go/` directory next to the binding's `pubspec.yaml` (module path = repository path of that directory, e.g. `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`). When the transpiler sees a binding whose package has `go/go.mod`, it emits
