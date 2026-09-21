@@ -1,6 +1,6 @@
 module github.com/o-ga09/dart2tinygo/packages/wio_terminal/go
 
-go 1.22.1
+go 1.27
 
 require (
 	tinygo.org/x/drivers v0.33.0
