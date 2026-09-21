@@ -17,7 +17,7 @@ jobs:
           - packages/tinygo_machine
           - packages/wio_terminal
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
       - name: Install dependencies
         working-directory: ${{ matrix.package }}
@@ -43,7 +43,7 @@ jobs:
       matrix:
         target: [wioterminal, pico]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
       # TinyGo 0.42 requires Go 1.25–1.27; the runner default is older.
       - uses: actions/setup-go@v5
