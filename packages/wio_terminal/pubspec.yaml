@@ -1,0 +1,20 @@
+name: wio_terminal
+description: >
+  Seeed Wio Terminal 向けの dart2tinygo バインディング（LCD など）。
+  Dart 側は @GoImport / @GoName / @GoType の注釈のみ、実体は go/ 配下の
+  TinyGo ランタイムパッケージ。
+version: 0.0.0
+publish_to: none
+repository: https://github.com/o-ga09/dart2tinygo
+topics:
+  - embedded
+  - tinygo
+  - microcontroller
+  - wioterminal
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  tinygo_annotations:
+    path: ../tinygo_annotations

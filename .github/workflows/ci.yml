@@ -15,6 +15,7 @@ jobs:
           - packages/dart2tinygo
           - packages/tinygo_annotations
           - packages/tinygo_machine
+          - packages/wio_terminal
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1

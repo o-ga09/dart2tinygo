@@ -24,7 +24,8 @@ packages/
   dart2tinygo/        # CLI + 変換エンジン
   tinygo_annotations/  # バインディング用の注釈（@GoImport / @GoName / @GoType）
   tinygo_machine/      # TinyGo 共通 machine パッケージのバインディング
-examples/              # サンプル（blinky など）
+  wio_terminal/        # Seeed Wio Terminal バインディング（LCD）。Dart 注釈 + Go ランタイム
+examples/              # サンプル（hello_wioterminal、blinky など）
 docs/                  # 対応機能表・変換ルール・バインディングの書き方
 ```
 

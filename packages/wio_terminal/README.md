@@ -1,0 +1,21 @@
+# wio_terminal (package)
+
+**Languages:** English | [日本語](./README.ja.md)
+
+dart2tinygo binding for the [Seeed Wio Terminal](https://wiki.seeedstudio.com/Wio-Terminal-Getting-Started/).
+The Dart side (`lib/wio_terminal.dart`) is annotations only; the behaviour is
+the TinyGo package in `go/` (`github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`, imported as `wio`).
+
+Currently provided:
+
+| Dart | Go | Purpose |
+| --- | --- | --- |
+| `newDisplay()` | `wio.NewDisplay()` | Configure SPI3 + the ILI9341 LCD (landscape, backlight on, cleared to black) |
+| `Display.clear()` | `(*Display).Clear()` | Fill the screen with black |
+| `Display.drawText(x, y, text)` | `(*Display).DrawText(x, y, text)` | Draw white text (FreeMono Bold 12pt) with its baseline at (x, y) |
+
+See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
+
+This package lives in the main repository for now so the example builds from a
+checkout; the design still treats board bindings as separable packages, and it
+may move to its own repository later.

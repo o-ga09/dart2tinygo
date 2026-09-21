@@ -24,7 +24,8 @@ packages/
   dart2tinygo/         # CLI + transpiler engine
   tinygo_annotations/  # Annotations for bindings (@GoImport / @GoName / @GoType)
   tinygo_machine/       # Board-agnostic bindings for TinyGo's common machine package
-examples/               # Samples (blinky, etc.)
+  wio_terminal/         # Seeed Wio Terminal binding (LCD), Dart annotations + Go runtime
+examples/               # Samples (hello_wioterminal, blinky, etc.)
 docs/                   # Supported features, conversion rules, how to write bindings
 ```
 
