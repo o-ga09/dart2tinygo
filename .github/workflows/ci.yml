@@ -25,9 +25,16 @@ jobs:
       - name: Analyze
         working-directory: ${{ matrix.package }}
         run: dart analyze
+      # Binding/annotation packages are declarations only and have no tests;
+      # `dart test` exits 65 without a test/ dir and a package:test dev dep.
       - name: Test
         working-directory: ${{ matrix.package }}
-        run: dart test
+        run: |
+          if [ -d test ]; then
+            dart test
+          else
+            echo "no test/ directory in ${{ matrix.package }}; skipping"
+          fi
 
   tinygo-compile:
     name: TinyGo compile test (${{ matrix.target }})
@@ -38,6 +45,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
+      # TinyGo 0.42 requires Go 1.25–1.27; the runner default is older.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
       - uses: acifani/setup-tinygo@v3
         with:
           tinygo-version: "0.42.0"
