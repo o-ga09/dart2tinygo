@@ -4,7 +4,10 @@
 
 Dart のサブセットを TinyGo のソースコードに変換し、マイコンで動かすための OSS です。
 
-> **Status:** 初期構築中。まだ変換エンジンの実装はありません。
+> **Status:** 初期構築中。v0.1 最小変換は実装済みです（トップレベルの
+> `void main()` 単体、`int` 型ローカル変数、`while (true)`、`print(...)`、
+> `sleep(Duration(...))`）。正確な範囲は
+> [対応言語機能](./docs/supported_features.ja.md) を参照してください。
 
 ## これは何か
 

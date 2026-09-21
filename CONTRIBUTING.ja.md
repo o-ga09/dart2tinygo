@@ -24,7 +24,7 @@
 
 - `packages/dart2tinygo/test/golden/` に `<case>.dart`（入力）と `<case>.go`（期待される生成結果）のペアを追加する。
 - ケース名はテストしたい機能がわかる名前にする（例: `string_interpolation.dart` / `string_interpolation.go`）。
-- 期待値の更新は `--update-goldens` 相当のオプションで行える想定（変換エンジン側の実装に依存。詳細は実装時に本項目を更新する）。
+- 期待値の更新は `packages/dart2tinygo/` で `UPDATE_GOLDENS=1 dart test test/golden_test.dart` を実行することで行える。現在のジェネレータの出力（gofmt 済み）で各 `<case>.go` を上書きする。
 - 未対応構文のテストは、期待するエラーメッセージと行番号も併せて検証する。
 
 ## バインディングを追加・変更するときの流れ

@@ -4,7 +4,10 @@
 
 An OSS transpiler that converts a subset of Dart into TinyGo source code, so it can run on microcontrollers.
 
-> **Status:** Early scaffolding. The transpiler itself is not implemented yet.
+> **Status:** Early scaffolding. The v0.1 minimal transpile is implemented — a
+> single `void main()` with `int` locals, `while (true)`, `print(...)`, and
+> `sleep(Duration(...))`. See [supported features](./docs/supported_features.md)
+> for the exact scope.
 
 ## What is this?
 

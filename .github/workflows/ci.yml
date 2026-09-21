@@ -36,8 +36,16 @@ jobs:
         target: [wioterminal, pico]
     steps:
       - uses: actions/checkout@v4
-      # TODO: once the `dart2tinygo build` command is implemented, replace this
-      # with a step that converts an examples/ sample to Go and verifies it
-      # builds with `tinygo build -target=${{ matrix.target }}`.
-      - name: Placeholder (transpiler not implemented yet)
-        run: echo "This job is not enabled yet because the dart2tinygo transpiler is not implemented."
+      - uses: dart-lang/setup-dart@v1
+      - uses: acifani/setup-tinygo@v3
+        with:
+          tinygo-version: "0.42.0"
+      - name: Install dependencies
+        working-directory: packages/dart2tinygo
+        run: dart pub get
+      - name: dart2tinygo build (v0.1 minimal golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/minimal_blink.dart -o /tmp/dart2tinygo-out
+      - name: tinygo build -target=${{ matrix.target }}
+        working-directory: /tmp/dart2tinygo-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
