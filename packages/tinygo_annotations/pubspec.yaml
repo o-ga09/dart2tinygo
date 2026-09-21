@@ -1,7 +1,6 @@
 name: tinygo_annotations
 description: >
   ボードバインディング用の注釈（@GoImport / @GoName / @GoType）。
-  現時点では実装なし（スケルトンのみ）。
 version: 0.0.0
 publish_to: none
 repository: https://github.com/o-ga09/dart2tinygo
