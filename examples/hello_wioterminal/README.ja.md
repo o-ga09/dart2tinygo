@@ -69,3 +69,13 @@ func main() {
 ILI9341/SPI/バックライトの扱いはすべてバインディングの Go 側
 （`packages/wio_terminal/go`）にあり、生成された `go.mod` はチェックアウト先を
 指す `replace` ディレクティブでそれを参照します。
+
+## エディタで "package machine is not in std" と出る場合
+
+生成コードは（バインディング経由で）`machine` を import しますが、これは TinyGo の
+GOROOT にしか存在しないため、通常の `go build` / `go vet` / gopls は
+`package machine is not in std` を報告します。これは想定どおりで、
+`tinygo build` / `tinygo flash` には影響しません。エディタに認識させるには
+[TinyGo VS Code 拡張](https://marketplace.visualstudio.com/items?itemName=tinygo.vscode-tinygo)
+を入れて **TinyGo: Select target** → `wioterminal` を実行してください。
+`tinygo info -target=wioterminal` のキャッシュ済み GOROOT とビルドタグが gopls に渡されます。

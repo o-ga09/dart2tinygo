@@ -70,3 +70,13 @@ func main() {
 All of the ILI9341/SPI/backlight handling lives in the Go half of the binding
 (`packages/wio_terminal/go`), which the generated `go.mod` references with a
 `replace` directive pointing at your checkout.
+
+## "package machine is not in std" in your editor
+
+The generated code (via the binding) imports `machine`, which only exists in
+TinyGo's GOROOT, so plain `go build` / `go vet` / gopls report
+`package machine is not in std`. That is expected and does not affect
+`tinygo build` / `tinygo flash`. To make the editor understand it, install the
+[TinyGo VS Code extension](https://marketplace.visualstudio.com/items?itemName=tinygo.vscode-tinygo)
+and run **TinyGo: Select target** → `wioterminal`, which points gopls at
+`tinygo info -target=wioterminal`'s cached GOROOT and build tags.
