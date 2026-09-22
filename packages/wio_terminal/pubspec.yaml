@@ -3,7 +3,7 @@ description: >-
   dart2tinygo binding for the Seeed Wio Terminal (LCD text). The Dart side is
   @GoImport / @GoName / @GoType annotations only; the TinyGo runtime package
   ships in go/ and is wired up by the generated go.mod.
-version: 0.0.0
+version: 0.0.1
 repository: https://github.com/o-ga09/dart2tinygo
 issue_tracker: https://github.com/o-ga09/dart2tinygo/issues
 topics:
@@ -19,4 +19,4 @@ resolution: workspace
 dependencies:
   # Kept in lockstep with this package's own version by tool/sync_versions.dart
   # (run by tagpr on every release).
-  tinygo_annotations: ^0.0.0
+  tinygo_annotations: ^0.0.1

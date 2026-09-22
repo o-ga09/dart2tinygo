@@ -2,7 +2,7 @@ name: tinygo_annotations
 description: >-
   Annotations (@GoImport / @GoName / @GoType) for writing dart2tinygo board
   bindings: declare the Go-side counterparts of external Dart declarations.
-version: 0.0.0
+version: 0.0.1
 repository: https://github.com/o-ga09/dart2tinygo
 issue_tracker: https://github.com/o-ga09/dart2tinygo/issues
 topics:
