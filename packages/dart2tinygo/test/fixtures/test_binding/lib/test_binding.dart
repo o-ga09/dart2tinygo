@@ -89,3 +89,25 @@ class Widget {
 /// Missing `@GoName`: the checker must point at the annotation, not at the
 /// call site's syntax.
 external void unnamed();
+
+/// A binding enum (#31): each value maps onto an existing Go identifier via
+/// `@GoName`, exactly like the `Button.a`/`Button.b` static getters above,
+/// but declared with `enum` syntax instead of a `@GoType` class with
+/// `external static` getters.
+@GoType('rt.Pin')
+enum Pin {
+  @GoName('rt.LED')
+  led,
+  @GoName('rt.D0')
+  d0,
+}
+
+/// A binding enum constant missing `@GoName`: reported like a missing
+/// `@GoName` on a constant getter.
+@GoType('rt.BadPin')
+enum BadPin {
+  unnamed,
+}
+
+@GoName('rt.High')
+external void high(Pin pin);

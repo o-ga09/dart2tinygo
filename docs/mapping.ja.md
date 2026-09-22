@@ -171,8 +171,9 @@ fallthrough しないので、case を終わらせるための `break` は生成
 `switch` の `case` 内の裸の `break;` を特別扱いしない — 他の場所と同じ「while/for
 ループの内側でのみ有効」というチェックをそのまま通す。現時点の用途では不要なため）。
 
-定数値の `case` のみ、かつ `int`/`String`/`bool` の switch 式に限定する — Go の
-`switch` にはパターンマッチがないため、定数以外の Dart 3 パターン
+定数値の `case` のみ、かつ `int`/`String`/`bool`/ユーザー定義 `enum` の switch 式に
+限定する（`@GoType` バインディング enum の `switch` は対象外。下の「enum」参照）—
+Go の `switch` にはパターンマッチがないため、定数以外の Dart 3 パターン
 （`case var x:`、デストラクチャリング、オブジェクトパターン）はチェッカーが拒否する。
 `case ... when ...` ガードやラベル付き case も同様に拒否する。
 
@@ -181,11 +182,10 @@ fallthrough しないので、case を終わらせるための `break` は生成
 | `switch (x) { case 0: ...; case 1: ...; default: ...; }` | `switch x { case 0: ...; case 1: ...; default: ...; }` — そのまま |
 | `case a: case b: <body>`（連続する空の case） | `case a, b: <body>` — Dart の case グルーピング構文は文ではないので、隣接する空の case はカンマ区切りの値リストを持つ 1 つの Go `case` にまとめる |
 | `case a: /* 何もせず default に落ちる */ default: <body>` | `default: <body>`（`a` の case は削除され、まとめられない）— Go の `default` には値リストがないが、他のどの `case` にも該当しない値は元々すべて `default` にマッチするので、空の case が `default` に落ちるのと結果的に同じになる |
-| `case 'x':` / `case true:` | `case "x":` / `case true:` — case の値は switch 式と同じ型のリテラルでなければならず、暗黙の変換はしない |
+| `case 'x':` / `case true:` / `case Mode.on:` | `case "x":` / `case true:` / `case ModeOn:` — case の値は switch 式と同じ型のリテラル（enum の switch 式なら同じ enum の値）でなければならず、暗黙の変換はしない |
 
 v0.1 のスコープ外：`case ... when ...` ガード、定数以外／デストラクチャリングの
-パターン、`switch` 内での `for`/`for-in` ラベルターゲット、enum 値の case（`enum`
-対応待ち。型対応表を参照）。
+パターン、`switch` 内での `for`/`for-in` ラベルターゲット。
 
 ## カスケード（2026-09-22 決定、実装済み）
 
@@ -201,6 +201,47 @@ v0.1 のスコープ外：`case ... when ...` ガード、定数以外／デス�
 | `newDisplay()..clear()..drawText(40, 120, 'Hi');`（文として） | `_t0 := wio.NewDisplay()` の後 `_t0.Clear()`、`_t0.DrawText(40, 120, "Hi")` — 合成の `_t0`/`_t1`/... レシーバ。生成ファイル全体で一意 |
 | `final d = newDisplay()..clear();`（ローカル変数の初期化子として） | `d := wio.NewDisplay()` の後 `d.Clear()` — ローカル変数自身の名前をレシーバに再利用し、合成の一時変数は不要 |
 
+## `enum`（2026-09-22 決定、実装済み）
+
+2種類あり、どちらも素の `enum` 構文で宣言する — 型パラメータ、`with`/`implements`
+節、追加のフィールド・メソッド、値へのコンストラクタ引数はなし（v0.1 には
+自前のクラスがなく、enum の値が呼び出すコンストラクタを持たないため）。
+
+**ユーザー定義の enum**（`@GoType` なし）は `type E int` と `const ( ... iota )`
+ブロック、値1つにつき1つの Go 識別子（`E` + 先頭を大文字にした値の名前。
+例：`Mode.off` → `ModeOff`）、そして値自身でインデックスするパッケージレベルの
+名前テーブルになる — Go は基底型が整数型であればどんな型でもインデックスに
+使えるため（Go 標準ライブラリの `time.Month.String()` が自身の名前テーブルを
+インデックスするのと同じ）、`e.name` にキャストは不要。`.index` はキャストが
+必要（`int(e)`）：`e` の Go の型は `int` ではなく `E` であり、本プロジェクトの
+「暗黙のキャストをしない」という前提（`.toInt()`/`.round()` と同様）に従う。
+`==`/`!=` と `switch` は同じ enum の値同士でのみ対応し、Go 自身の `==`/`!=`/
+`switch` にそのまま対応する（enum 型の `switch` の case 値は同じ enum の
+定数でなければならない）。
+
+| Dart | Go |
+| --- | --- |
+| `enum Mode { off, on }` | `type Mode int` + `const (ModeOff Mode = iota; ModeOn)` + `var modeNames = [...]string{"off", "on"}` |
+| `Mode.on` | `ModeOn` |
+| `m.name` | `modeNames[m]` |
+| `m.index` | `int(m)` |
+| `m == Mode.on` | `m == ModeOn` |
+| `switch (m) { case Mode.off: ...; case Mode.on: ...; }` | `switch m { case ModeOff: ...; case ModeOn: ...; }` |
+
+**バインディング enum**（enum に `@GoType`、各値に `@GoName`）は、`@GoType`
+クラスの `external static` getter 定数（上の「注釈バインディング」の
+`Button.a`）の enum 版：各 Dart 定数が既存の Go 識別子を表すと宣言するだけで、
+生成器はこの enum 自体に対する Go 宣言を一切出力しない — 定数 getter と
+全く同じ、素の `@GoName` 参照のみ。`.name`/`.index`/比較/`switch` は対象外：
+値は不透明な Go 識別子であり、名前テーブルをインデックスしたり比較したり
+するための Dart 側の int 表現を持たない。
+
+| Dart | Go |
+| --- | --- |
+| `@GoType('tgm.Pin') enum Pin { @GoName('tgm.LED') led, @GoName('tgm.D0') d0 }` | この enum 自体には何も出力しない |
+| `Pin.led` | `tgm.LED` |
+| `high(Pin.led);` | `tgm.High(tgm.LED)` |
+
 ## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
 | Dart | Go | 状態 |
@@ -212,13 +253,13 @@ v0.1 のスコープ外：`case ... when ...` ガード、定数以外／デス�
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
 | `List<int>` | `[]byte` — 下の「List<int>」を参照 | 実装済 |
 | `List<T>`（`T` が `int` 以外） | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
-| `enum` | `type E int` + `const ( ... iota )`。`.index` は値そのもの、`.name` は文字列テーブル | 決定（v0.2） |
+| `enum` | ユーザー定義 enum：`type E int` + `const ( ... iota )` + 名前テーブル、`.index`/`.name`/`==`/`switch` — 上の「enum」参照。`@GoType`/`@GoName` バインディング enum：定数の `@GoName` の値をそのまま | 実装済 |
 | クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） | 決定（v0.2） |
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 — 上の「トップレベル関数」を参照 | 実装済 |
 | `if` / `else if` / `else` | そのまま対応。各分岐は必ずブロック（上の v0.1 の表を参照） | 実装済 |
 | `while`（一般条件）/ `for`（宣言変数1つ、updater1つ）/ `break` / `continue` | そのまま対応。上の v0.1 の表を参照 | 実装済 |
 | `for-in` | → `range` | 決定（v0.2） |
-| `switch` | `switch`。定数の `int`/`String`/`bool` case のみ、fallthrough なし、空の case はまとめる／削除する — 上の「switch 文」を参照 | 実装済 |
+| `switch` | `switch`。定数の `int`/`String`/`bool`/ユーザー定義 `enum` case のみ、fallthrough なし、空の case はまとめる／削除する — 上の「switch 文」を参照 | 実装済 |
 | `@GoType` バインディング値へのカスケード `a..b()..c()` | 一時変数（初期化子の場合はローカル変数自身の名前）+ 文の列 — 上の「カスケード」を参照 | 実装済 |
 | バインディング呼び出し結果へのメソッドチェーン `a().b()` | そのまま対応 — 上の「注釈バインディング」を参照 | 実装済 |
 | `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |

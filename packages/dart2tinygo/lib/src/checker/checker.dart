@@ -42,6 +42,7 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
 
   FunctionDeclaration? mainDecl;
   final functions = <FunctionDeclaration>[];
+  final enums = <EnumDeclaration>[];
   for (final declaration in unit.declarations) {
     if (declaration is FunctionDeclaration) {
       functions.add(declaration);
@@ -55,13 +56,17 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
       }
       continue;
     }
+    if (declaration is EnumDeclaration) {
+      enums.add(declaration);
+      continue;
+    }
     errors.add(
       _error(
         result,
         declaration.offset,
         'top-level "${_declarationLabel(declaration)}" is not supported yet; '
-        'v0.1 minimal scope only supports top-level functions and a single '
-        'void main()',
+        'v0.1 minimal scope only supports top-level functions, enum '
+        'declarations, and a single void main()',
       ),
     );
   }
@@ -83,7 +88,102 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
     }
   }
 
+  for (final enumDeclaration in enums) {
+    errors.addAll(_checkEnumDeclaration(result, enumDeclaration));
+  }
+
   return errors;
+}
+
+/// `enum Mode { off, on }` (a plain user enum) or, carrying `@GoType`, a
+/// binding enum whose constants map onto existing Go identifiers via
+/// `@GoName` — the enum counterpart of a `@GoType` class's `external
+/// static` getter constants (`Button.a` in `docs/writing_bindings.md`), but
+/// declared with `enum` syntax. v0.1 minimal scope: a plain name (no type
+/// parameters), no `with`/`implements` clause, no extra fields or methods,
+/// and no constructor arguments on a constant. Recorded in
+/// `docs/mapping.md`.
+List<UnsupportedSyntaxError> _checkEnumDeclaration(
+  ResolvedUnitResult result,
+  EnumDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  final name = _enumName(declaration);
+
+  final namePart = declaration.namePart;
+  if (namePart is! NameWithTypeParameters || namePart.typeParameters != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'enum "$name" must not have type parameters in v0.1 minimal scope',
+      ),
+    );
+  }
+  if (declaration.withClause != null || declaration.implementsClause != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'enum "$name" must not use "with"/"implements" in v0.1 minimal '
+        'scope',
+      ),
+    );
+  }
+  if (declaration.body.members.isNotEmpty) {
+    errors.add(
+      _error(
+        result,
+        declaration.body.members.first.offset,
+        'enum "$name" must not declare fields or methods in v0.1 minimal '
+        'scope',
+      ),
+    );
+  }
+
+  final element = declaration.declaredFragment!.element;
+  final goTypeName = goTypeOf(element);
+  if (goTypeName != null && goImportOf(element.library) == null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'enum "$name" has @GoType but its library has no @GoImport '
+        'annotation (see docs/writing_bindings.md)',
+      ),
+    );
+  }
+
+  for (final constant in declaration.body.constants) {
+    if (constant.arguments != null) {
+      errors.add(
+        _error(
+          result,
+          constant.arguments!.offset,
+          'enum constant "$name.${constant.name.lexeme}" must not take '
+          'constructor arguments in v0.1 minimal scope',
+        ),
+      );
+    }
+    if (goTypeName != null &&
+        goNameOf(constant.declaredFragment!.element) == null) {
+      errors.add(
+        _error(
+          result,
+          constant.offset,
+          'enum constant "$name.${constant.name.lexeme}" has no @GoName '
+          'annotation (see docs/writing_bindings.md)',
+        ),
+      );
+    }
+  }
+
+  return errors;
+}
+
+String _enumName(EnumDeclaration declaration) {
+  final namePart = declaration.namePart;
+  return namePart is NameWithTypeParameters ? namePart.typeName.lexeme : '?';
 }
 
 List<UnsupportedSyntaxError> _checkMainDeclaration(
@@ -654,7 +754,8 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
   final scrutineeSupported = scrutineeType != null &&
       (scrutineeType.isDartCoreInt ||
           scrutineeType.isDartCoreString ||
-          scrutineeType.isDartCoreBool);
+          scrutineeType.isDartCoreBool ||
+          _isUserEnumType(scrutineeType));
   if (!scrutineeSupported) {
     errors.add(
       _error(
@@ -662,7 +763,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
         statement.expression.offset,
         'switch expression has type '
         '"${scrutineeType?.getDisplayString() ?? '?'}", but only '
-        'int/String/bool are supported in v0.1 minimal scope',
+        'int/String/bool/enum are supported in v0.1 minimal scope',
       ),
     );
   } else {
@@ -732,9 +833,10 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
   return errors;
 }
 
-/// A case value must be a literal matching the switch expression's type
-/// exactly — no implicit promotion, matching the "no implicit casts"
-/// precedent used throughout (`docs/mapping.md`).
+/// A case value must be a literal (or, for an enum scrutinee, a constant of
+/// that same enum, #31) matching the switch expression's type exactly — no
+/// implicit promotion, matching the "no implicit casts" precedent used
+/// throughout (`docs/mapping.md`).
 List<UnsupportedSyntaxError> _checkCaseValue(
   ResolvedUnitResult result,
   Expression expression,
@@ -743,7 +845,11 @@ List<UnsupportedSyntaxError> _checkCaseValue(
   final matches = (scrutineeType.isDartCoreInt &&
           expression is IntegerLiteral) ||
       (scrutineeType.isDartCoreString && expression is SimpleStringLiteral) ||
-      (scrutineeType.isDartCoreBool && expression is BooleanLiteral);
+      (scrutineeType.isDartCoreBool && expression is BooleanLiteral) ||
+      (_isUserEnumType(scrutineeType) &&
+          expression is Identifier &&
+          _enumConstantFieldOf(expression)?.enclosingElement ==
+              (scrutineeType as InterfaceType).element);
   if (!matches) {
     return [
       _error(
@@ -752,7 +858,7 @@ List<UnsupportedSyntaxError> _checkCaseValue(
         'case value "${_expressionLabel(expression)}" does not match the '
         'switch expression\'s type '
         '"${scrutineeType.getDisplayString()}"; v0.1 minimal scope only '
-        'supports constant int/String/bool literals',
+        'supports constant int/String/bool/enum values',
       ),
     ];
   }
@@ -937,10 +1043,16 @@ bool _isSupportedType(DartType? type) =>
         type.isDartCoreBool ||
         type.isDartCoreString ||
         _isListOfInt(type) ||
-        isGoType(type));
+        isGoType(type) ||
+        _isEnumType(type));
 
 const _supportedTypesLabel =
-    'int, double, bool, String, List<int>, and @GoType binding';
+    'int, double, bool, String, List<int>, enum, and @GoType binding';
+
+/// A user enum or a `@GoType` binding enum (#31) — see
+/// `_checkEnumDeclaration`.
+bool _isEnumType(DartType? type) =>
+    type is InterfaceType && type.element is EnumElement;
 
 /// `List<int>` maps to Go `[]byte` — see the `List<int>` section of
 /// `docs/mapping.md`. No other element type is supported —
@@ -969,7 +1081,12 @@ List<UnsupportedSyntaxError> _checkExpression(
     if (expression.element is LocalElement) return const [];
     final builtinGetter = _checkBuiltinGetter(result, expression);
     if (builtinGetter != null) return builtinGetter;
+    if (_isUserEnumConstant(expression)) return const [];
     if (_constantBindingOf(expression) != null) return const [];
+    final enumProblem = _describeEnumConstantProblem(expression);
+    if (enumProblem != null) {
+      return [_error(result, expression.offset, enumProblem)];
+    }
     final bindingProblem = _describeBindingProblem(expression);
     if (bindingProblem != null) {
       return [_error(result, expression.offset, bindingProblem)];
@@ -1213,16 +1330,84 @@ bool _sameComparableType(DartType a, DartType b) =>
     (a.isDartCoreInt && b.isDartCoreInt) ||
     (a.isDartCoreDouble && b.isDartCoreDouble) ||
     (a.isDartCoreBool && b.isDartCoreBool) ||
-    (a.isDartCoreString && b.isDartCoreString);
+    (a.isDartCoreString && b.isDartCoreString) ||
+    (_isUserEnumType(a) &&
+        _isUserEnumType(b) &&
+        (a as InterfaceType).element == (b as InterfaceType).element);
 
 /// The `@GoName` binding behind a reference to a Go constant or package
-/// variable: an `external` top-level getter (`red`) or an `external static`
-/// getter on a `@GoType` class (`Button.a`). Instance getters are not
-/// bindings; a Go method that returns a value is declared as a method.
+/// variable: an `external` top-level getter (`red`), an `external static`
+/// getter on a `@GoType` class (`Button.a`), or a constant of a `@GoType`
+/// enum (`Pin.led`, #31). Instance getters are not bindings; a Go method
+/// that returns a value is declared as a method.
 GoBinding? _constantBindingOf(Identifier reference) {
+  final enumBinding = _enumConstantBindingOf(reference);
+  if (enumBinding != null) return enumBinding;
   final element = reference.element;
   if (element is! GetterElement || !element.isStatic) return null;
   return goBindingOf(element);
+}
+
+/// The enum constant field behind [reference] (`Mode.on`, `Pin.led`), or
+/// `null` if it isn't an enum constant reference at all.
+FieldElement? _enumConstantFieldOf(Identifier reference) {
+  final element = reference.element;
+  if (element is! GetterElement) return null;
+  final variable = element.variable;
+  if (variable is! FieldElement || !variable.isEnumConstant) return null;
+  return variable;
+}
+
+/// Whether [reference] is a constant of a plain user enum (`Mode.on`) —
+/// always valid, unlike a `@GoType` binding enum constant, which additionally
+/// needs `@GoName` (see [_enumConstantBindingOf]).
+bool _isUserEnumConstant(Identifier reference) {
+  final field = _enumConstantFieldOf(reference);
+  if (field == null) return false;
+  final enumElement = field.enclosingElement;
+  return enumElement is EnumElement && goTypeOf(enumElement) == null;
+}
+
+/// The `@GoName` binding behind a `@GoType` binding enum constant (`Pin.led`,
+/// #31) — the enum counterpart of [_constantBindingOf]'s `Button.a` case,
+/// but resolved from the constant field's own `@GoName`/enclosing enum's
+/// `@GoType`/`@GoImport` rather than from an `external static` getter, since
+/// an enum constant is never `external`.
+GoBinding? _enumConstantBindingOf(Identifier reference) {
+  final field = _enumConstantFieldOf(reference);
+  if (field == null) return null;
+  final enumElement = field.enclosingElement;
+  if (enumElement is! EnumElement) return null;
+  if (goTypeOf(enumElement) == null) return null;
+  final goName = goNameOf(field);
+  if (goName == null) return null;
+  final import = goImportOf(enumElement.library);
+  if (import == null) return null;
+  return GoBinding(goName: goName, import: import);
+}
+
+/// Explains why an enum constant reference looks like a `@GoType` binding
+/// but isn't a complete one — the enum counterpart of
+/// [_describeBindingProblem], needed because a binding enum declared in an
+/// imported binding package (not the entry file) never goes through
+/// [_checkEnumDeclaration], so a missing `@GoName` is only caught here, at
+/// the usage site.
+String? _describeEnumConstantProblem(Identifier reference) {
+  final field = _enumConstantFieldOf(reference);
+  if (field == null) return null;
+  final enumElement = field.enclosingElement;
+  if (enumElement is! EnumElement) return null;
+  final name = '${enumElement.name}.${field.name}';
+  if (goTypeOf(enumElement) == null) return null;
+  if (goNameOf(field) == null) {
+    return 'enum constant "$name" has no @GoName annotation (see '
+        'docs/writing_bindings.md)';
+  }
+  if (goImportOf(enumElement.library) == null) {
+    return 'enum "${enumElement.name}" has @GoType but its library has no '
+        '@GoImport annotation (see docs/writing_bindings.md)';
+  }
+  return null;
 }
 
 /// `num` conversion methods bridging `int` and `double`
@@ -1290,16 +1475,18 @@ List<UnsupportedSyntaxError>? _checkNumConversion(
   return const [];
 }
 
-/// `.length` (`String` or `List<int>` receiver) and `.codeUnits` (`String`
-/// receiver) are built-in getters, not `@GoName` bindings: `x.length` maps
-/// to Go's `len(x)`, `s.codeUnits` to `[]byte(s)` (`docs/mapping.md`). Dart
+/// `.length` (`String` or `List<int>` receiver), `.codeUnits` (`String`
+/// receiver), and, on a user enum value (#31), `.name`/`.index` are
+/// built-in getters, not `@GoName` bindings: `x.length` maps to Go's
+/// `len(x)`, `s.codeUnits` to `[]byte(s)`, `e.name` to the generated name
+/// table indexed by `e`, `e.index` to `int(e)` (`docs/mapping.md`). Dart
 /// parses these as `PrefixedIdentifier` when the receiver is a bare
 /// identifier (`s.length`) and `PropertyAccess` otherwise (`'hi'.length`) —
 /// both shapes are handled here.
 ///
-/// Returns `null` (not `[]`) when [expression] isn't one of these two
-/// getters, so the caller falls through to its usual identifier/binding
-/// handling instead of treating every unrecognized property as an error.
+/// Returns `null` (not `[]`) when [expression] isn't one of these getters,
+/// so the caller falls through to its usual identifier/binding handling
+/// instead of treating every unrecognized property as an error.
 List<UnsupportedSyntaxError>? _checkBuiltinGetter(
   ResolvedUnitResult result,
   Expression expression,
@@ -1318,15 +1505,27 @@ List<UnsupportedSyntaxError>? _checkBuiltinGetter(
     default:
       return null;
   }
-  if (name != 'length' && name != 'codeUnits') return null;
 
   final targetType = target.staticType;
+  if (name == 'name' || name == 'index') {
+    if (!_isUserEnumType(targetType)) return null;
+    return _checkExpression(result, target);
+  }
+
+  if (name != 'length' && name != 'codeUnits') return null;
   final isString = targetType?.isDartCoreString ?? false;
   if (name == 'codeUnits' && !isString) return null;
   if (name == 'length' && !isString && !_isListOfInt(targetType)) return null;
 
   return _checkExpression(result, target);
 }
+
+/// A user enum (no `@GoType`) — the flavor `.name`/`.index`/comparison/
+/// `switch` support #31 (a `@GoType` binding enum's values are opaque Go
+/// identifiers with no Dart-side representation to index a name table or
+/// compare, so those stay out of scope for it).
+bool _isUserEnumType(DartType? type) =>
+    _isEnumType(type) && goTypeOf((type as InterfaceType).element) == null;
 
 /// `String.fromCharCodes(bytes)` is a named constructor
 /// (`InstanceCreationExpression`, the same AST shape as `Duration(...)`),

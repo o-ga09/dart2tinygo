@@ -1586,6 +1586,108 @@ void main() {
     });
   });
 
+  group('enum', () {
+    test('accepts a user enum: declaration, .name, .index, comparison',
+        () async {
+      final errors = await checkSource('''
+enum Mode { off, on }
+
+void main() {
+  var m = Mode.on;
+  print(m.name);
+  print('\${m.index}');
+  if (m == Mode.on) {
+    print('on');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts switch on a user enum', () async {
+      final errors = await checkSource('''
+enum Mode { off, on }
+
+void main() {
+  var m = Mode.on;
+  switch (m) {
+    case Mode.off:
+      print('off');
+    case Mode.on:
+      print('on');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a @GoType binding enum constant as a binding-call argument',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  high(Pin.led);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a binding enum constant without @GoName', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  var p = BadPin.unnamed;
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('no @GoName annotation'));
+    });
+
+    test('reports an enum with type parameters', () async {
+      final errors = await checkSource('''
+enum Mode<T> { off, on }
+
+void main() {}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('type parameters'));
+    });
+
+    test('reports an enum with extra fields/methods', () async {
+      final errors = await checkSource('''
+enum Mode {
+  off, on;
+
+  String label() => name;
+}
+
+void main() {}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('fields or methods'));
+    });
+
+    test('reports a switch expression of unsupported (non-matching) enum type',
+        () async {
+      final errors = await checkSource('''
+enum Mode { off, on }
+enum Level { low, high }
+
+void main() {
+  var m = Mode.on;
+  switch (m) {
+    case Level.low:
+      print('x');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('does not match'));
+    });
+  });
+
   test('reports missing main()', () async {
     final errors = await checkSource('''
 int add(int a, int b) => a + b;

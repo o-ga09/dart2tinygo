@@ -191,21 +191,22 @@ the generator needs no `break` to terminate a case (a bare `break;` inside a
 "only inside a while/for loop" check as everywhere else, since none of the
 motivating use cases need it yet).
 
-Restricted to constant-value cases on an `int`/`String`/`bool` scrutinee —
-Go's `switch` has no pattern matching, so a Dart 3 pattern other than a bare
-constant (`case var x:`, destructuring, object patterns) is rejected by the
-checker, as is a `case ... when ...` guard and a labeled case.
+Restricted to constant-value cases on an `int`/`String`/`bool`/user-`enum`
+scrutinee (a `@GoType` binding enum's `switch` is out of scope, see "enum"
+below) — Go's `switch` has no pattern matching, so a Dart 3 pattern other
+than a bare constant (`case var x:`, destructuring, object patterns) is
+rejected by the checker, as is a `case ... when ...` guard and a labeled
+case.
 
 | Dart | Go |
 | --- | --- |
 | `switch (x) { case 0: ...; case 1: ...; default: ...; }` | `switch x { case 0: ...; case 1: ...; default: ...; }` — direct |
 | `case a: case b: <body>` (consecutive empty cases) | `case a, b: <body>` — Dart's case-grouping syntax isn't a statement, so adjacent empty cases are merged into one Go `case` clause with a comma-separated value list |
 | `case a: /* nothing, falls into default */ default: <body>` | `default: <body>` (the `a` case is dropped, not merged) — Go's `default` has no value list, but it already matches any value no explicit `case` claims, which is exactly what an empty case falling into `default` means |
-| `case 'x':` / `case true:` | `case "x":` / `case true:` — the case value must be a literal of the scrutinee's own type, no implicit conversion |
+| `case 'x':` / `case true:` / `case Mode.on:` | `case "x":` / `case true:` / `case ModeOn:` — the case value must be a literal (or, for an enum scrutinee, a constant of that same enum) of the scrutinee's own type, no implicit conversion |
 
 Out of scope for v0.1: `case ... when ...` guards, non-constant/destructuring
-patterns, `for-in`/`for-loop`-in-`switch` label targets, and enum-value
-cases (blocked on `enum` support, see the type mapping table).
+patterns, and `for-in`/`for-loop`-in-`switch` label targets.
 
 ## Cascades (decided 2026-09-22, implemented)
 
@@ -222,6 +223,49 @@ getter/setter/index section meaningful).
 | `newDisplay()..clear()..drawText(40, 120, 'Hi');` (a statement) | `_t0 := wio.NewDisplay()` then `_t0.Clear()` then `_t0.DrawText(40, 120, "Hi")` — a synthetic `_t0`/`_t1`/... receiver, unique across the whole generated file |
 | `final d = newDisplay()..clear();` (a local's initializer) | `d := wio.NewDisplay()` then `d.Clear()` — the local's own name is reused as the receiver, no synthetic temp needed |
 
+## `enum` (decided 2026-09-22, implemented)
+
+Two flavors, both declared with plain `enum` syntax — no type parameters,
+`with`/`implements` clause, extra fields/methods, or constructor arguments
+on a constant (v0.1 has no classes of its own to give an enum constant a
+constructor to call).
+
+**A user enum** (no `@GoType`) becomes `type E int` plus a `const (...
+iota)` block, one Go identifier per constant (`E` + the constant name with
+its first letter capitalized, e.g. `Mode.off` → `ModeOff`), and a
+package-level name table indexed by the value itself — Go permits indexing
+with any type whose underlying type is an integer type, the same way the Go
+standard library's `time.Month.String()` indexes into its own name table,
+so `e.name` needs no cast. `.index` does need one (`int(e)`): `e`'s Go type
+is `E`, not `int`, matching the project's no-implicit-casts precedent (the
+same as `.toInt()`/`.round()`). `==`/`!=` and `switch` are supported between
+values of the same enum, mapping directly onto Go's own `==`/`!=`/`switch`
+(an enum-typed `switch`'s case values must be constants of that same enum).
+
+| Dart | Go |
+| --- | --- |
+| `enum Mode { off, on }` | `type Mode int` + `const (ModeOff Mode = iota; ModeOn)` + `var modeNames = [...]string{"off", "on"}` |
+| `Mode.on` | `ModeOn` |
+| `m.name` | `modeNames[m]` |
+| `m.index` | `int(m)` |
+| `m == Mode.on` | `m == ModeOn` |
+| `switch (m) { case Mode.off: ...; case Mode.on: ...; }` | `switch m { case ModeOff: ...; case ModeOn: ...; }` |
+
+**A binding enum** (`@GoType` on the enum, `@GoName` on each constant) is the
+enum counterpart of a `@GoType` class's `external static` getter constants
+(`Button.a` in "Annotation bindings" above): it declares that each Dart
+constant stands for an existing Go identifier, and the generator emits no
+Go declaration of its own for the enum — only the bare `@GoName` reference,
+exactly like a constant getter. `.name`/`.index`/comparison/`switch` are out
+of scope for it: its values are opaque Go identifiers with no Dart-side
+int representation to index a name table with or compare.
+
+| Dart | Go |
+| --- | --- |
+| `@GoType('tgm.Pin') enum Pin { @GoName('tgm.LED') led, @GoName('tgm.D0') d0 }` | nothing emitted for the enum itself |
+| `Pin.led` | `tgm.LED` |
+| `high(Pin.led);` | `tgm.High(tgm.LED)` |
+
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
@@ -233,13 +277,13 @@ getter/setter/index section meaningful).
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
 | `List<int>` | `[]byte` — see "List<int>" below | impl. |
 | `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
-| `enum` | `type E int` + `const ( ... iota )`; `.index` is the value, `.name` via a string table | decided (v0.2) |
+| `enum` | user enum: `type E int` + `const ( ... iota )` + a name table, `.index`/`.name`/`==`/`switch` — see "enum" above; `@GoType`/`@GoName` binding enum: the constant's `@GoName` value, verbatim | impl. |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker — see "Top-level functions" above | impl. |
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
 | `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
 | `for-in` | → `range` | decided (v0.2) |
-| `switch` | `switch`; constant `int`/`String`/`bool` cases only, no fallthrough, empty cases merge/drop — see "Switch statements" above | impl. |
+| `switch` | `switch`; constant `int`/`String`/`bool`/user-`enum` cases only, no fallthrough, empty cases merge/drop — see "Switch statements" above | impl. |
 | cascade `a..b()..c()` on a `@GoType` binding value | temporary (or the local's own name, as an initializer) + statement sequence — see "Cascades" above | impl. |
 | method chaining `a().b()` on a binding call result | direct — see "Annotation bindings" above | impl. |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |

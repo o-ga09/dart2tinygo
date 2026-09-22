@@ -103,6 +103,13 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (top_level_functions)
         working-directory: /tmp/dart2tinygo-funcs-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises a user enum: declaration, .name, .index, ==, switch.
+      - name: dart2tinygo build (enum golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/enum.dart -o /tmp/dart2tinygo-enum-out
+      - name: tinygo build -target=${{ matrix.target }} (enum)
+        working-directory: /tmp/dart2tinygo-enum-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'

@@ -52,19 +52,21 @@ class GoDeps {
   int nextTempId = 0;
 }
 
-/// Converts every top-level function of a checked [ResolvedUnitResult]
-/// (`main()` plus any others — see `docs/mapping.md`, "Top-level
-/// functions") into a single-file Go program, in source order (Go doesn't
-/// care about declaration order, so this is purely for a readable diff
-/// against the Dart source).
+/// Converts every top-level function and enum of a checked
+/// [ResolvedUnitResult] (`main()` plus any others — see `docs/mapping.md`,
+/// "Top-level functions", "enum") into a single-file Go program, in source
+/// order (Go doesn't care about declaration order, so this is purely for a
+/// readable diff against the Dart source).
 Future<GeneratedGoFile> generateGoFile(ResolvedUnitResult result) async {
-  final functions = result.unit.declarations.whereType<FunctionDeclaration>();
-
   final deps = GoDeps(dartrtModule: await _resolveDartrtModule());
   final imports = deps.imports;
   final funcsBuffer = StringBuffer();
-  for (final function in functions) {
-    _writeFunctionDeclaration(function, funcsBuffer, deps);
+  for (final declaration in result.unit.declarations) {
+    if (declaration is FunctionDeclaration) {
+      _writeFunctionDeclaration(declaration, funcsBuffer, deps);
+    } else if (declaration is EnumDeclaration) {
+      _writeEnumDeclaration(declaration, funcsBuffer, deps);
+    }
   }
 
   final out = StringBuffer()
@@ -138,12 +140,58 @@ void _writeFunctionDeclaration(
   out.writeln();
 }
 
+/// `enum Mode { off, on }` (#31, `docs/mapping.md`): `type Mode int` +
+/// `const ( ModeOff Mode = iota; ModeOn )` + a name table indexed by the
+/// value itself (Go allows indexing with any type whose underlying type is
+/// an integer type, the same way `time.Month.String()` indexes into its own
+/// name table in the Go standard library — no cast needed). A `@GoType`
+/// enum (a binding enum, e.g. `Pin`) emits nothing here: like any other
+/// binding, its constants only ever reference an existing Go identifier via
+/// `@GoName` (see [_writeEnumConstantReference]), so there is no Go
+/// declaration for *this* generator to own.
+void _writeEnumDeclaration(
+  EnumDeclaration declaration,
+  StringBuffer out,
+  GoDeps deps,
+) {
+  final element = declaration.declaredFragment!.element;
+  if (goTypeOf(element) != null) return;
+
+  final name = element.name!;
+  final constants = declaration.body.constants;
+
+  out.writeln('type $name int');
+  out.writeln();
+  out.writeln('const (');
+  for (var i = 0; i < constants.length; i++) {
+    final constName = '$name${_capitalize(constants[i].name.lexeme)}';
+    out.writeln(i == 0 ? '\t$constName $name = iota' : '\t$constName');
+  }
+  out.writeln(')');
+  out.writeln();
+
+  final namesVar = '${_lowerFirst(name)}Names';
+  final values =
+      constants.map((c) => _goStringLiteral(c.name.lexeme)).join(', ');
+  out.writeln('var $namesVar = [...]string{$values}');
+  out.writeln();
+}
+
+String _capitalize(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+String _lowerFirst(String s) =>
+    s.isEmpty ? s : '${s[0].toLowerCase()}${s.substring(1)}';
+
 /// The Go type expression for a Dart type the checker has already confirmed
 /// is supported (`_isSupportedType`) — used for parameter and return types,
 /// which (unlike locals) Go's syntax requires spelling out explicitly. A
 /// `@GoType` here also registers its binding's import, since a type used
 /// only in a signature (never itself the target of a method call) would
-/// otherwise never trigger that registration. Recorded in `docs/mapping.md`.
+/// otherwise never trigger that registration. A user enum's Go type is its
+/// own generated name (`Mode`, see [_writeEnumDeclaration]); a `@GoType`
+/// binding enum's type is the annotated Go type expression, same as any
+/// other binding (`isGoType`). Recorded in `docs/mapping.md`.
 String _goTypeName(DartType type, GoDeps deps) {
   if (type.isDartCoreInt) return 'int';
   if (type.isDartCoreDouble) return 'float64';
@@ -155,6 +203,9 @@ String _goTypeName(DartType type, GoDeps deps) {
     final import = goImportOf(element.library);
     if (import != null) _useImport(import, deps);
     return goTypeOf(element)!;
+  }
+  if (type is InterfaceType && type.element is EnumElement) {
+    return type.element.name!;
   }
   throw StateError('unchecked Go type: ${type.getDisplayString()}');
 }
@@ -614,15 +665,41 @@ String _writeExpression(Expression expression, GoDeps deps) {
 
 /// A `@GoName` on an `external` top-level or static getter names a Go
 /// constant or package-level variable, emitted as the bare (package-
-/// qualified) identifier: `red` / `Button.a` → `rt.Red` / `rt.ButtonA`.
-/// Recorded in `docs/mapping.md`.
+/// qualified) identifier: `red` / `Button.a` → `rt.Red` / `rt.ButtonA`. An
+/// enum constant reference (#31) is handled by [_writeEnumConstantReference]
+/// instead — an enum constant getter is never `external`, so it can't share
+/// this function's `goBindingOf` lookup. Recorded in `docs/mapping.md`.
 String? _writeConstantReference(Identifier reference, GoDeps deps) {
+  final enumReference = _writeEnumConstantReference(reference, deps);
+  if (enumReference != null) return enumReference;
   final element = reference.element;
   if (element is! GetterElement || !element.isStatic) return null;
   final binding = goBindingOf(element);
   if (binding == null) return null;
   _useImport(binding.import, deps);
   return binding.goName;
+}
+
+/// `Mode.on` (a user enum) → the generated Go constant name (`ModeOn`, see
+/// [_writeEnumDeclaration]). `Pin.led` (a `@GoType` binding enum) → its
+/// `@GoName` value, exactly like [_writeConstantReference] does for an
+/// `external static` getter (#31, `docs/mapping.md`).
+String? _writeEnumConstantReference(Identifier reference, GoDeps deps) {
+  final element = reference.element;
+  if (element is! GetterElement) return null;
+  final variable = element.variable;
+  if (variable is! FieldElement || !variable.isEnumConstant) return null;
+  final enumElement = variable.enclosingElement;
+  if (enumElement is! EnumElement) return null;
+
+  final goTypeName = goTypeOf(enumElement);
+  if (goTypeName == null) {
+    return '${enumElement.name}${_capitalize(variable.name!)}';
+  }
+  final goName = goNameOf(variable)!;
+  final import = goImportOf(enumElement.library)!;
+  _useImport(import, deps);
+  return goName;
 }
 
 /// `.toDouble()`/`.toInt()`/`.round()` (`docs/mapping.md`): `int.toDouble()`
@@ -653,12 +730,16 @@ String? _writeNumConversion(MethodInvocation call, GoDeps deps) {
   }
 }
 
-/// `.length` (`String` or `List<int>` receiver) and `.codeUnits` (`String`
-/// receiver) — see checker.dart's `_checkBuiltinGetter` for the two AST
-/// shapes this recognizes (`PrefixedIdentifier` for a bare-identifier
-/// receiver, `PropertyAccess` otherwise). `.length` → Go's `len(x)` (works
-/// for both `string` and `[]byte`); `.codeUnits` → `[]byte(s)`.
-/// `docs/mapping.md`.
+/// `.length` (`String` or `List<int>` receiver), `.codeUnits` (`String`
+/// receiver), and, on a user enum value (#31), `.name`/`.index` — see
+/// checker.dart's `_checkBuiltinGetter` for the two AST shapes this
+/// recognizes (`PrefixedIdentifier` for a bare-identifier receiver,
+/// `PropertyAccess` otherwise). `.length` → Go's `len(x)` (works for both
+/// `string` and `[]byte`); `.codeUnits` → `[]byte(s)`; `.name` → the
+/// generated name table indexed by the value itself (`modeNames[m]`, no
+/// cast needed — see [_writeEnumDeclaration]); `.index` → `int(m)` (an
+/// explicit cast: `m`'s Go type is the enum's own defined type, not `int`,
+/// matching the project's no-implicit-casts precedent). `docs/mapping.md`.
 String? _writeBuiltinGetter(Expression expression, GoDeps deps) {
   final Expression target;
   final String name;
@@ -674,6 +755,20 @@ String? _writeBuiltinGetter(Expression expression, GoDeps deps) {
     default:
       return null;
   }
+
+  if (name == 'name' || name == 'index') {
+    final targetType = target.staticType;
+    if (targetType is! InterfaceType || targetType.element is! EnumElement) {
+      return null;
+    }
+    final enumElement = targetType.element as EnumElement;
+    if (goTypeOf(enumElement) != null) return null;
+    final value = _writeExpression(target, deps);
+    return name == 'index'
+        ? 'int($value)'
+        : '${_lowerFirst(enumElement.name!)}Names[$value]';
+  }
+
   if (name != 'length' && name != 'codeUnits') return null;
   final value = _writeExpression(target, deps);
   return name == 'codeUnits' ? '[]byte($value)' : 'len($value)';

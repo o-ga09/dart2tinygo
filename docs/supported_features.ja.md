@@ -26,10 +26,11 @@
 | `int` ⇄ `double` 変換：`.toDouble()` / `.toInt()` / `.round()` | 実装済み（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に） |
 | `if` / `else if` / `else` | 実装済み（各分岐はブロック。ループと `if` は自由にネスト可） |
 | 比較（`==`/`!=`/`<`/`<=`/`>`/`>=`）・論理（`&&`/`\|\|`/`!`）演算子 | 実装済み（`==`/`!=` は同じ型の `int`/`double`/`bool`/`String` 同士、`<`/`<=`/`>`/`>=` は同じ型の `int`/`int` か `double`/`double`、`&&`/`\|\|`/`!` は `bool`） |
-| `switch` | 実装済み（`int`/`String`/`bool` 式のみ。定数値の `case`、`default` に対応。連続する空の `case` は Go の `case a, b:` にまとめられる。`case ... when ...` ガードやデストラクチャリングパターンは未実装） |
+| `switch` | 実装済み（`int`/`String`/`bool`/ユーザー定義 `enum` 式のみ。定数値の `case`、`default` に対応。連続する空の `case` は Go の `case a, b:` にまとめられる。`case ... when ...` ガードやデストラクチャリングパターンは未実装） |
 | `print` | 実装済み（任意の `String` 式、または文字列補間） |
 | 文字列補間 | `int` / `double` / `bool` / `String` の式が実装済み |
 | カスケード `..` | 実装済み。`@GoType` のバインディング値のみ対応（`newDisplay()..clear()..drawText(...)`）。各セクションは必ず素の `..method(args)` バインディング呼び出しでなければならず、文として、またはローカル変数の初期化子として使える |
+| `enum` | 実装済み — ユーザー定義の enum（`enum Mode { off, on }`：`.index`、`.name`、`==`/`!=`、`switch` に対応）と、`@GoType`/`@GoName` によるバインディング enum（各値が既存の Go 識別子にマップされる。`static external` getter 定数と同様）。型パラメータ、`with`/`implements`、追加のフィールド・メソッド、値へのコンストラクタ引数は未対応 |
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
 | 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数と、`@GoType` のレシーバ — ローカル変数、または（メソッドチェーン。任意の深さ）別のバインディング呼び出しの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
 | 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `double` の文字列補間に組み込み済み |
@@ -44,7 +45,6 @@
 | --- | --- |
 | クラス（フィールド・コンストラクタ・メソッド、継承なし） | 未実装 |
 | `List<T>` → Go スライス | 未実装 |
-| `enum` | 未実装 |
 | ビット演算、`int.toSigned(n)` | 未実装 |
 
 ## 将来（要望・需要次第）

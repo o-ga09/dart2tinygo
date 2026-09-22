@@ -13,7 +13,9 @@
 | `@GoName(name)` | `external` なトップレベル関数 | Go 側の呼び出し先を完全修飾で書く（例: `'wio.NewDisplay'`。接頭辞は `@GoImport` の alias）。 |
 | `@GoName(name)` | `@GoType` クラスの `external` なインスタンスメソッド | Go のメソッド名（例: `'DrawText'`）。レシーバに対して呼び出される。 |
 | `@GoName(name)` | `external` なトップレベル getter、または `@GoType` クラスの `external static` getter | Go の定数・パッケージ変数を完全修飾で書く（例: `'wio.Red'`）。呼び出し括弧なしの識別子として出力される。 |
+| `@GoName(name)` | `@GoType` enum の `enum` 定数 | Go の定数・パッケージ変数を完全修飾で書く（例: `'machine.LED'`）。上の `static external` getter と全く同じく、呼び出し括弧なしの識別子として出力される。 |
 | `@GoType(name)` | クラス | このクラスの値の実体となる Go 型（例: `'*wio.Display'`）。トランスパイラ自身が生成することはなく、`@GoName` 関数の戻り値としてのみ現れる。 |
+| `@GoType(name)` | `enum` | この enum をバインディング enum として宣言する：各定数は自分自身の `@GoName`（上）を持たなければならず、トランスパイラはこの enum 自体に対する Go 宣言を一切出力しない — 名前が付いた Go 識別子への素の参照のみ。`@GoType` を付けない素の `enum` はユーザー定義 enum で、トランスパイラが全体を生成する（`type E int` + 定数 + 名前テーブル）。詳細は `docs/mapping.ja.md` の「enum」を参照。 |
 
 checker が呼び出しを受け付けるのは、`external` であり、`@GoName` を持ち、`@GoImport` 付きライブラリに属する、という 3 条件がそろった宣言だけです。欠けている場合は、どの注釈が足りないかをファイル・行番号付きで報告します。
 
@@ -51,6 +53,16 @@ class Color {
 
 @GoName('wio.RGB')
 external Color rgb(int r, int g, int b);
+
+/// バインディング enum：各値が、上の `Color.red` が static getter で
+/// 名指すのと同じように、既存の Go 識別子を名指す。
+@GoType('wio.Pin')
+enum Pin {
+  @GoName('wio.LED')
+  led,
+  @GoName('wio.D0')
+  d0,
+}
 ```
 
 ```go
@@ -58,8 +70,14 @@ package wio
 
 type Display struct{ /* ... */ }
 type Color uint16
+type Pin uint8
 
 var Red = Color(0xF800)
+
+const (
+	LED Pin = iota
+	D0
+)
 
 func NewDisplay() *Display                                  { /* ... */ }
 func RGB(r, g, b int) Color                                 { /* ... */ }
@@ -73,8 +91,8 @@ func (d *Display) Width() int                               { /* ... */ }
 - トップレベルのバインディング関数と、`@GoType` の値を持つレシーバ — ローカル変数、または別のバインディング呼び出しの戻り値（チェーン：`newDisplay().clear()`、任意の深さまで）— へのバインディングメソッド呼び出し（`display.drawText(...)`）を、文として（void 以外の戻り値は捨てられる）、ローカル変数の初期化子として、別のバインディング呼び出しの引数として、または `print(...)` の中で呼べる。
 - `@GoType` のバインディング値へのカスケード（`newDisplay()..clear()..drawText(...)`）を、文として、またはローカル変数の初期化子として使える。各カスケードのセクションは必ず素の `..method(args)` バインディング呼び出しでなければならない — v0.1 には自前のクラス・フィールドがないため、カスケードした getter/setter/添字セクションには対応する意味がない。
 - 戻り値・ローカル変数の型: `int`、`double`、`bool`、`String`、`@GoType` クラス。`@GoType` には値型（`'wio.Color'`）もポインタ（`'*wio.Display'`）も書ける（文字列をそのまま出力するのでどちらも動く）。
-- 引数: 上記の型のリテラル、ローカル変数、別のバインディング呼び出し、Go 定数の参照（`red`、`Color.red`）。Dart の `int` / `double` / `bool` / `String` 引数は Go の `int` / `float64` / `bool` / `string` に対応するので、Go 側のシグネチャもその型で宣言する（`uint8` が欲しい Go 側はバインディング内で変換する。トランスパイラはキャストを出力しない）。
-- Go の定数・パッケージ変数: `external` なトップレベル getter か `external static` getter に `@GoName` を付ける。インスタンス getter はバインディングにならない。値を返す Go メソッドは `external` メソッドとして公開する。
+- 引数: 上記の型のリテラル、ローカル変数、別のバインディング呼び出し、Go 定数の参照（`red`、`Color.red`、`Pin.led`）。Dart の `int` / `double` / `bool` / `String` 引数は Go の `int` / `float64` / `bool` / `string` に対応するので、Go 側のシグネチャもその型で宣言する（`uint8` が欲しい Go 側はバインディング内で変換する。トランスパイラはキャストを出力しない）。
+- Go の定数・パッケージ変数: `external` なトップレベル getter、`external static` getter、または `@GoType` enum の定数に `@GoName` を付ける。インスタンス getter はバインディングにならない。値を返す Go メソッドは `external` メソッドとして公開する。
 
 生成される Go は [`mapping.ja.md`](./mapping.ja.md) を参照。
 
@@ -84,7 +102,6 @@ func (d *Display) Width() int                               { /* ... */ }
   バインディングの Go 側がアダプタになる：そうした API を単一の値を返す関数・メソッドに
   包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
   初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
-- **enum：** Dart の `enum` に `@GoType('machine.Pin')`、各値に `@GoName('machine.D0')` を付けられる。
 - `tinygo_machine` バインディングの最初の API は `Pin.led` / `Pin(n)` /
   `configure(PinMode.output | PinMode.input)` / `high()` / `low()` / `toggle()` / `get()`。
   `machine.LED` や `machine.PinConfig{...}` は最初のルールに従い Go 側で吸収する。

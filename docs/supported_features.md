@@ -26,12 +26,13 @@ Any PR that adds a language feature must update this table.
 | `int` ⇄ `double` conversion: `.toDouble()` / `.toInt()` / `.round()` | Implemented (`.toDouble()` on `int`; `.toInt()`/`.round()` on `double`) |
 | `if` / `else if` / `else` | Implemented (block-bodied branches; loops and `if` may nest freely) |
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
-| `switch` | Implemented (`int`/`String`/`bool` expressions only; constant-value cases, `default`; consecutive empty cases group into Go's `case a, b:`; guards (`case ... when ...`) and destructuring patterns not implemented) |
+| `switch` | Implemented (`int`/`String`/`bool`/user-`enum` expressions only; constant-value cases, `default`; consecutive empty cases group into Go's `case a, b:`; guards (`case ... when ...`) and destructuring patterns not implemented) |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
 | String interpolation | Implemented for `int` / `double` / `bool` / `String` expressions |
 | `Duration` and `sleep` | Implemented (`dart:io` `sleep()`, `Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`) |
 | Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions and to methods on a `@GoType` receiver — a local, or (method chaining, any depth) another binding call's result — returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)) |
 | Cascade `..` | Implemented, on a `@GoType` binding value only (`newDisplay()..clear()..drawText(...)`); every section must be a bare `..method(args)` binding call, as a statement or a local's initializer |
+| `enum` | Implemented — a plain user enum (`enum Mode { off, on }`: `.index`, `.name`, `==`/`!=`, `switch`) and a `@GoType`/`@GoName` binding enum (each constant maps onto an existing Go identifier, like a `static external` getter constant); no type parameters, `with`/`implements`, extra fields/methods, or constructor arguments on a constant |
 | Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation |
 | `tinygo_machine`: LED, GPIO in/out, sleep | Not implemented |
 
@@ -45,7 +46,6 @@ See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 | --- | --- |
 | Classes (fields, constructors, methods; no inheritance) | Not implemented |
 | `List<T>` → Go slice | Not implemented |
-| `enum` | Not implemented |
 | Bitwise operations, `int.toSigned(n)` | Not implemented |
 
 ## Future (depending on demand)
