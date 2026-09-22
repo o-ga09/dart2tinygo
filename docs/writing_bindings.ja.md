@@ -117,6 +117,31 @@ func (d *Display) Width() int                               { /* ... */ }
   `itsybitsy-m4`（atsamd51g19、TCC0〜2 のみ）を確認済み。実機での検証は未実施
   （デューティ比・周波数の正しさはコンパイルだけでは確認できない）。
 
+## 重い依存を別の Go サブパッケージに分離する（決定済み、2026-09-22）
+
+バインディングの Go 実装がパッケージの他の部分よりずっと重い依存を引き込む場合
+（例: `wio_terminal` のmicroSDバインディング #19 は cgo ベースの
+`tinygo.org/x/tinyfs/fatfs` を必要とする）、同じパッケージに住んでいるという
+理由だけで他のすべてのサンプルのビルドを肥大化させるべきではない。本体側の
+変更は不要：
+
+- バインディングの既存の `go/` ディレクトリ配下に、追加のコードを別の Go
+  サブパッケージとして置く（例: `go/sd/`）。あくまで*同じ* Go モジュール
+  （ネストした `go.mod` は作らない）のサブパッケージとし、依存は共有の
+  `go.mod` に追加する。
+- それに専用の Dart ライブラリファイル（例: `lib/sd.dart`）を与え、パッケージの
+  メインライブラリとは別に独自の `@GoImport('.../go/sd', alias: 'wiosd')` を
+  持たせる。
+
+既存のローカルモジュール replace のロジック（`pubspec.yaml` の隣にある単一の
+`go/go.mod` を起点にする `findLocalModuleNear`）は、どのサブパッケージの
+import パスもそのままカバーする。Go の `replace` はどのサブパッケージが
+import されるかではなくモジュールパスでマッチするためで、これは
+`wio_terminal` の `go/sd`（メインパッケージである `go/` に対して）で
+`dart2tinygo build` + `tinygo build -target=wioterminal` により実際に
+end-to-end で確認済み。メインライブラリしか import しないサンプルは、
+サブパッケージの cgo コンパイルを一切トリガーしない。
+
 ## Go ランタイムをバインディングに同梱する
 
 Go モジュールはバインディングの `pubspec.yaml` と同じ階層の `go/` ディレクトリに置きます（モジュールパスはそのディレクトリのリポジトリ上のパス。例: `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`）。パッケージに `go/go.mod` があるバインディングを使うと、トランスパイラは生成する `go.mod` に
@@ -134,3 +159,4 @@ Dart 側の宣言と Go 側のシグネチャは手で同期してください�
 
 - `packages/wio_terminal`: Seeed Wio Terminal（LCD への文字描画）。`examples/hello_wioterminal` が利用。
 - `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）、ADC（`newAdc` / `read`）、PWM（`newPwm` / `setDuty`）を実装済み（#21、#44）。`examples/blinky` が利用。
+- `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD（FAT）バインディング。上記の方針に従い専用の Go サブパッケージ／Dart ライブラリに分離（#19）。

@@ -38,6 +38,16 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `Accelerometer.update()` | `(*Accelerometer).Update()` | 3軸をまとめて読み取りキャッシュする |
 | `.x()`/`.y()`/`.z()`、`.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`、`.XMilliG()`/... | キャッシュ値（G またはミリG） |
 
+`lib/sd.dart`（別ライブラリ、`import 'package:wio_terminal/sd.dart';`）は microSD バインディングを提供する。`wio_terminal.dart` には含めず分離しているのは、使わないプログラムまで `tinygo.org/x/tinyfs/fatfs` の cgo による FAT 実装を巻き込まないようにするため：
+
+| Dart | Go | 用途 |
+| --- | --- | --- |
+| `mountSdCard()` | `wiosd.MountSdCard()` | SPI2 + カード検出ピンを設定しFATファイルシステムをマウント |
+| `SdCard.isInserted()` | `(*SdCard).IsInserted()` | カードが物理的に挿入されているか |
+| `SdCard.exists(path)` | `(*SdCard).Exists(path)` | `path` がカード上に存在するか |
+| `SdCard.readText(path)` / `.writeText(path, text)` / `.appendText(path, text)` | `(*SdCard).ReadText(path)` / `.WriteText(...)` / `.AppendText(...)` | テキストファイルの読み書き（読み取り失敗時は `''`） |
+| `SdCard.readBytes(path)` / `.writeBytes(path, data)` | `(*SdCard).ReadBytes(path)` / `.WriteBytes(...)` | バイト列の読み書き（`List<int>` / `[]byte`） |
+
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 
 サンプルがチェックアウトからビルドできるよう、当面このパッケージは本リポジトリに置いています。

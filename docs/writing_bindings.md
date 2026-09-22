@@ -122,6 +122,30 @@ See [`mapping.md`](./mapping.md) for the generated Go.
   hardware (duty-cycle/frequency correctness can't be confirmed by
   compilation alone).
 
+## Splitting a heavy dependency into its own Go sub-package (decided, 2026-09-22)
+
+A binding whose Go implementation pulls in a much heavier dependency than
+the rest of the package (e.g. `wio_terminal`'s microSD binding, #19, needs
+`tinygo.org/x/tinyfs/fatfs`, which is cgo-based) should not grow every other
+example's build just because it lives in the same package. The fix needs no
+core changes:
+
+- Put the extra code in a Go sub-package under the binding's existing `go/`
+  directory (e.g. `go/sd/`) — still the *same* Go module (no nested
+  `go.mod`), just a sub-package, with its own dependencies added to the
+  shared `go.mod`.
+- Give it its own Dart library file (e.g. `lib/sd.dart`) with its own
+  `@GoImport('.../go/sd', alias: 'wiosd')`, separate from the package's main
+  library.
+
+The existing local-module replace logic (`findLocalModuleNear`, keyed off
+the single `go/go.mod` next to `pubspec.yaml`) already covers every
+sub-package's import path, since Go's `replace` matches by module path, not
+by which sub-package is imported — confirmed end to end (`dart2tinygo build`
++ `tinygo build -target=wioterminal`) for `wio_terminal`'s `go/sd` against
+`go/` (its main package). An example that only imports the main library
+never triggers the sub-package's cgo compilation at all.
+
 ## Shipping the Go runtime with the binding
 
 Put the Go module in a `go/` directory next to the binding's `pubspec.yaml` (module path = repository path of that directory, e.g. `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`). When the transpiler sees a binding whose package has `go/go.mod`, it emits
@@ -139,3 +163,4 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 
 - `packages/wio_terminal`: Seeed Wio Terminal (LCD text). Used by `examples/hello_wioterminal`.
 - `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`), ADC (`newAdc` / `read`), and PWM (`newPwm` / `setDuty`) implemented (#21, #44). Used by `examples/blinky`.
+- `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD (FAT) binding, split into its own Go sub-package/Dart library per the section above (#19).

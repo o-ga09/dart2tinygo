@@ -6,3 +6,5 @@ tinygo.org/x/tinydraw v0.4.0 h1:U9V0mHz8/jPShKjlh199vCfq1ARFyUOD1b+FfqIwV8c=
 tinygo.org/x/tinydraw v0.4.0/go.mod h1:WCV/EMljTv8w04iAxjv+fRD6/4ffx0afATYeJlN90Yo=
 tinygo.org/x/tinyfont v0.6.0 h1:GibXDSFz6xrWnEDkDRo6vsbOyRw0MVj/eza3zNHMSHs=
 tinygo.org/x/tinyfont v0.6.0/go.mod h1:onflMSkpWl7r7j4MIqhPEVV39pn7yL4N3MOePl3G+G8=
+tinygo.org/x/tinyfs v0.5.0 h1:1nLSvtvvoNcK3Ii+Dib9MVe4y/Fnp2iMgzbKgADGfbs=
+tinygo.org/x/tinyfs v0.5.0/go.mod h1:45hZCJ5e4rJxc3BaJTy1qhe5N+LbF/CpuFS4jPhhYuo=

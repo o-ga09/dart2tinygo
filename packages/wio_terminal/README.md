@@ -38,6 +38,16 @@ Currently provided:
 | `Accelerometer.update()` | `(*Accelerometer).Update()` | Read and cache all three axes |
 | `.x()`/`.y()`/`.z()`, `.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`, `.XMilliG()`/... | The cached reading, in G or milli-G |
 
+`lib/sd.dart` (a separate library, `import 'package:wio_terminal/sd.dart';`) provides the microSD binding, kept out of `wio_terminal.dart` so a program that doesn't use it doesn't pull in `tinygo.org/x/tinyfs/fatfs`'s cgo FAT implementation:
+
+| Dart | Go | Purpose |
+| --- | --- | --- |
+| `mountSdCard()` | `wiosd.MountSdCard()` | Configure SPI2 + the card-detect pin and mount a FAT filesystem |
+| `SdCard.isInserted()` | `(*SdCard).IsInserted()` | Whether a card is physically present |
+| `SdCard.exists(path)` | `(*SdCard).Exists(path)` | Whether `path` exists on the card |
+| `SdCard.readText(path)` / `.writeText(path, text)` / `.appendText(path, text)` | `(*SdCard).ReadText(path)` / `.WriteText(...)` / `.AppendText(...)` | Text file I/O (`''` on a failed read) |
+| `SdCard.readBytes(path)` / `.writeBytes(path, data)` | `(*SdCard).ReadBytes(path)` / `.WriteBytes(...)` | Byte file I/O (`List<int>` / `[]byte`) |
+
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 
 This package lives in the main repository for now so the example builds from a
