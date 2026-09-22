@@ -32,14 +32,10 @@ void main() {
 # 1. 依存解決（初回のみ。リポジトリルートで実行 — pub workspace）
 dart pub get
 
-# 2. Go に変換（main.go と go.mod を書き出し、続けて `go mod tidy` を実行）
+# 2. Go に変換して書き込み（main.go と go.mod を書き出し、`go mod tidy` を実行してから flash）
 cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart \
-  -o ../../examples/hello_wioterminal/build
-
-# 3. 書き込み
-cd ../../examples/hello_wioterminal/build
-tinygo flash -target=wioterminal .
+dart run bin/dart2tinygo.dart flash ../../examples/hello_wioterminal/main.dart \
+  -o ../../examples/hello_wioterminal/build --target=wioterminal
 ```
 
 画面が黒くなり、横向きで白い文字が表示されます。手動でコピーしたい場合は
