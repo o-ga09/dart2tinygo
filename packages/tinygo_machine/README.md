@@ -4,6 +4,13 @@
 
 [![pub package](https://img.shields.io/pub/v/tinygo_machine.svg)](https://pub.dev/packages/tinygo_machine)
 
+> This package's first published version is `0.0.2`, not `0.0.1`. All
+> packages in this repository share one lockstep version (see
+> [`docs/releasing.md`](../../docs/releasing.md)); `tinygo_machine` stayed
+> `publish_to: none` through the `v0.0.1` release and only joined pub.dev
+> once that was lifted, by which point the repository's version had already
+> moved to `0.0.2`.
+
 Board-agnostic bindings corresponding to TinyGo's `machine` package (GPIO, ADC, LED).
 
 Following the design principle of not putting board-specific code into the core (`packages/dart2tinygo`), this package only deals with functionality that TinyGo provides in common. Board-specific bindings live in separate packages (e.g. `package:wio_terminal`).
