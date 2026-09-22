@@ -2,6 +2,15 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/tinygo_machine.svg)](https://pub.dev/packages/tinygo_machine)
+
+> このパッケージの初回公開バージョンは `0.0.1` ではなく `0.0.2` です。この
+> リポジトリの全パッケージは1つのバージョンを共有する lockstep 方式です
+> （[`docs/releasing.md`](../../docs/releasing.ja.md) 参照）。`tinygo_machine`
+> は `v0.0.1` リリース時点では `publish_to: none` のままで、それが解除されて
+> pub.dev に参加した時点では、リポジトリ全体のバージョンはすでに `0.0.2` に
+> 進んでいました。
+
 TinyGo の `machine` パッケージ（GPIO、ADC、LED）に対応する、ボード非依存のバインディング。
 
 本体（`packages/dart2tinygo`）にボード固有コードを入れないという設計原則のもと、ここは TinyGo が共通で提供する機能のみを扱う。ボード固有のバインディングは別パッケージ（例: `package:wio_terminal`）とする。

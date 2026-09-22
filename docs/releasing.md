@@ -18,9 +18,7 @@ share **one version** (lockstep): a single tag `vX.Y.Z` bumps every pubspec.
    release PR to bump further (tagpr re-runs and updates it).
 4. Merging the release PR tags `vX.Y.Z` and creates the GitHub Release.
 5. The tag push runs `publish.yml`, which publishes, in dependency order,
-   `tinygo_annotations` → `wio_terminal` → `dart2tinygo`.
-   `tinygo_machine` is a skeleton and stays `publish_to: none` until it has
-   an implementation.
+   `tinygo_annotations` → `tinygo_machine` → `wio_terminal` → `dart2tinygo`.
 
 `CHANGELOG.md` lives at the repository root; `publish.yml` copies it into each
 package before publishing, since pub.dev expects one per package.
@@ -35,7 +33,7 @@ after merging the first release PR (so the pubspecs are at the release version):
 
 ```sh
 dart pub get
-for pkg in tinygo_annotations wio_terminal dart2tinygo; do
+for pkg in tinygo_annotations tinygo_machine wio_terminal dart2tinygo; do
   cp CHANGELOG.md packages/$pkg/CHANGELOG.md
   (cd packages/$pkg && dart pub publish)
 done
@@ -43,7 +41,7 @@ done
 
 ### 2. Enable automated publishing on pub.dev
 
-For each of the three packages, open **Admin** on pub.dev and under
+For each of the four packages, open **Admin** on pub.dev and under
 **Automated publishing → Publishing from GitHub Actions** set:
 
 - Repository: `o-ga09/dart2tinygo`
@@ -78,6 +76,7 @@ token's ref matches the tag pattern).
 dart pub get
 dart analyze
 (cd packages/dart2tinygo && dart test)
+(cd packages/tinygo_machine && dart pub publish --dry-run)
 (cd packages/wio_terminal && dart pub publish --dry-run)
 dart tool/sync_versions.dart 0.2.0   # what tagpr's postVersionCommand does
 ```
