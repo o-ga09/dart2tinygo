@@ -20,6 +20,10 @@
 | `print(<文字列>)` | `println(<文字列>)` — `fmt.Println` ではない（TinyGo で `fmt` を巻き込まないため） |
 | `print('... $x ...')` | 文字列連結：`"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)`（`seconds`/`minutes`/`hours`/`days`/`microseconds` にも対応。複数指定時は加算） |
+| `if (cond) { ... } else if (cond2) { ... } else { ... }` | `if cond { ... } else if cond2 { ... } else { ... }` — そのまま対応、同じ形。各分岐は必ず `{ ... }` ブロック |
+| `a == b` / `a != b` / `a < b` / `a <= b` / `a > b` / `a >= b` | Go でも同じ記号。両辺は同じ型でなければならない（`int`/`double` の暗黙変換はしない）。`<`/`<=`/`>`/`>=` はさらに `int`/`double` に限定 |
+| `a && b` / `a \|\| b` / `!a` | Go でも同じ記号。オペランドは `bool` |
+| `(expr)` | `(expr)` — 括弧はそのまま出力 |
 
 生成コードで実際に使う場合のみ Go の import（`strconv`、`time`）を出力する。
 
@@ -61,14 +65,15 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | --- | --- | --- |
 | `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値） |
 | `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値。算術・補間は未実装） |
-| `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値。演算子・`if` は未実装） |
+| `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値、比較・論理演算子、`if`） |
 | `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値。操作は未実装） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
 | `List<T>` | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
 | `enum` | `type E int` + `const ( ... iota )`。`.index` は値そのもの、`.name` は文字列テーブル | 決定（v0.2） |
 | クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） | 決定（v0.2） |
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 | 決定 |
-| `if` / `while` / `for (;;)` / `for-in` / `switch` / `break` / `continue` | そのまま対応。`for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
+| `if` / `else if` / `else` | そのまま対応。各分岐は必ずブロック（上の v0.1 の表を参照） | 実装済 |
+| `while`（一般条件）/ `for (;;)` / `for-in` / `switch` / `break` / `continue` | そのまま対応。`for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
 | カスケード `a..b()..c()` | 一時変数 + 文の列 | 決定 |
 | `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |
 | 継承・mixin・ジェネリクス・`T?`・`throw`/例外・`async` | checker が拒否 | 決定（将来） |

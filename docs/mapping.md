@@ -19,6 +19,10 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 | `print(<string>)` | `println(<string>)` — not `fmt.Println`, to avoid pulling in `fmt` on TinyGo |
 | `print('... $x ...')` | string concatenation: `"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)` (also supports `seconds`/`minutes`/`hours`/`days`/`microseconds`, summed when combined) |
+| `if (cond) { ... } else if (cond2) { ... } else { ... }` | `if cond { ... } else if cond2 { ... } else { ... }` — direct, same shape; every branch must be a `{ ... }` block |
+| `a == b` / `a != b` / `a < b` / `a <= b` / `a > b` / `a >= b` | same tokens in Go. Both operands must have the same type (no implicit `int`/`double` promotion); `<`/`<=`/`>`/`>=` are further restricted to `int`/`double` |
+| `a && b` / `a \|\| b` / `!a` | same tokens in Go; operands must be `bool` |
+| `(expr)` | `(expr)` — parenthesization is preserved verbatim |
 
 Go imports (`strconv`, `time`) are only emitted when the generated code
 actually uses them.
@@ -63,14 +67,15 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 | --- | --- | --- |
 | `int` | `int` | impl. (literals/locals/binding results) |
 | `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; no arithmetic or interpolation yet) |
-| `bool` | `bool` | impl. (literals/locals/binding results; no operators or `if` yet) |
+| `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
 | `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | impl. (literals/locals/binding results; no operations yet) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
 | `List<T>` | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
 | `enum` | `type E int` + `const ( ... iota )`; `.index` is the value, `.name` via a string table | decided (v0.2) |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker | decided |
-| `if` / `while` / `for (;;)` / `for-in` / `switch` / `break` / `continue` | direct; `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
+| `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
+| `while` (general condition) / `for (;;)` / `for-in` / `switch` / `break` / `continue` | direct; `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
 | cascade `a..b()..c()` | temporary + statement sequence | decided |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |
 | inheritance, mixins, generics, `T?`, `throw`/exceptions, `async` | rejected by the checker | decided (future) |

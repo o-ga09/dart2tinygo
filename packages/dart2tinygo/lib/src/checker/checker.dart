@@ -25,10 +25,12 @@ class UnsupportedSyntaxError {
 }
 
 /// v0.1 minimal scope only: a single `void main()` containing
-/// `int`/`double`/`bool`/`String` locals, `while (true)`, `print(...)`,
-/// `sleep(Duration(...))`, and calls into annotation bindings (`@GoImport` /
-/// `@GoName` / `@GoType`, see `docs/writing_bindings.md`). Everything else
-/// is reported here, up front, rather than discovered mid-conversion.
+/// `int`/`double`/`bool`/`String` locals, `while (true)`, `if`/`else if`/
+/// `else`, comparison (`==`/`!=`/`</`<=`/`>`/`>=`) and logical (`&&`/`||`/
+/// `!`) operators, `print(...)`, `sleep(Duration(...))`, and calls into
+/// annotation bindings (`@GoImport` / `@GoName` / `@GoType`, see
+/// `docs/writing_bindings.md`). Everything else is reported here, up front,
+/// rather than discovered mid-conversion.
 List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   final errors = <UnsupportedSyntaxError>[];
   final unit = result.unit;
@@ -147,16 +149,79 @@ List<UnsupportedSyntaxError> _checkStatement(
         }
       }
 
+    case IfStatement():
+      errors.addAll(_checkIfStatement(result, statement));
+
     default:
       errors.add(
         _error(
           result,
           statement.offset,
           '"${_statementLabel(statement)}" is not supported in v0.1 minimal '
-          'scope (only locals, while (true), print(...), sleep(...), and '
-          'binding calls)',
+          'scope (only locals, while (true), if/else if/else, print(...), '
+          'sleep(...), and binding calls)',
         ),
       );
+  }
+
+  return errors;
+}
+
+/// `if (cond) { ... } else if (cond2) { ... } else { ... }`: the condition
+/// must be a `bool` expression the generator can emit as-is, and every
+/// branch must be a block. `else if` is Dart's own `elseStatement` being
+/// another `IfStatement`, so the else-if chain falls out of recursing on it
+/// here. Nested loops stay out of scope even under `if`
+/// (`allowWhile: false`), matching the restriction on `while` above.
+List<UnsupportedSyntaxError> _checkIfStatement(
+  ResolvedUnitResult result,
+  IfStatement statement,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+
+  final condition = statement.expression;
+  final conditionErrors = _checkExpression(result, condition);
+  errors.addAll(conditionErrors);
+  if (conditionErrors.isEmpty) {
+    final type = condition.staticType;
+    if (type == null || !type.isDartCoreBool) {
+      errors.add(
+        _error(
+          result,
+          condition.offset,
+          'if condition has type "${type?.getDisplayString() ?? '?'}", but '
+          'must be a bool expression',
+        ),
+      );
+    }
+  }
+
+  final then = statement.thenStatement;
+  if (then is! Block) {
+    errors
+        .add(_error(result, then.offset, 'if branch must be a block: { ... }'));
+  } else {
+    for (final inner in then.statements) {
+      errors.addAll(_checkStatement(result, inner, allowWhile: false));
+    }
+  }
+
+  final elseStatement = statement.elseStatement;
+  if (elseStatement is IfStatement) {
+    // `else if (...) { ... }`.
+    errors.addAll(_checkIfStatement(result, elseStatement));
+  } else if (elseStatement is Block) {
+    for (final inner in elseStatement.statements) {
+      errors.addAll(_checkStatement(result, inner, allowWhile: false));
+    }
+  } else if (elseStatement != null) {
+    errors.add(
+      _error(
+        result,
+        elseStatement.offset,
+        'else branch must be a block: { ... }',
+      ),
+    );
   }
 
   return errors;
@@ -321,16 +386,133 @@ List<UnsupportedSyntaxError> _checkExpression(
       return [_error(result, expression.offset, bindingProblem)];
     }
   }
+  if (expression is ParenthesizedExpression) {
+    return _checkExpression(result, expression.expression);
+  }
+  if (expression is BinaryExpression) {
+    return _checkBinaryExpression(result, expression);
+  }
+  if (expression is PrefixExpression && expression.operator.lexeme == '!') {
+    final operand = expression.operand;
+    final operandErrors = _checkExpression(result, operand);
+    if (operandErrors.isNotEmpty) return operandErrors;
+    final type = operand.staticType;
+    if (type == null || !type.isDartCoreBool) {
+      return [
+        _error(
+          result,
+          operand.offset,
+          '"!" operand has type "${type?.getDisplayString() ?? '?'}", but '
+          'must be a bool expression',
+        ),
+      ];
+    }
+    return const [];
+  }
   return [
     _error(
       result,
       expression.offset,
       'expression "${_expressionLabel(expression)}" is not supported in v0.1 '
       'minimal scope (only int/double/bool/String literals, local variables, '
-      'binding calls, and Go constant references)',
+      'binding calls, Go constant references, comparisons, and logical '
+      'operators)',
     ),
   ];
 }
+
+const _comparisonOperators = {'<', '<=', '>', '>='};
+const _equalityOperators = {'==', '!='};
+const _logicalOperators = {'&&', '||'};
+
+/// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`) and logical (`&&`/`||`) binary
+/// operators map 1:1 onto Go, which uses the same tokens
+/// (`docs/mapping.md`). Every other operator (arithmetic, bitwise, string
+/// concatenation `+`) is out of v0.1 minimal scope.
+///
+/// To keep the generator cast-free, both operands of a comparison or
+/// equality must have the *same* supported type — no implicit `int`/`double`
+/// promotion the way Dart's `num` hierarchy allows. `<`/`<=`/`>`/`>=` are
+/// further restricted to `int`/`double`, matching Go's ordering operators.
+List<UnsupportedSyntaxError> _checkBinaryExpression(
+  ResolvedUnitResult result,
+  BinaryExpression expression,
+) {
+  final op = expression.operator.lexeme;
+  final isComparison = _comparisonOperators.contains(op);
+  final isEquality = _equalityOperators.contains(op);
+  final isLogical = _logicalOperators.contains(op);
+  if (!isComparison && !isEquality && !isLogical) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'binary operator "$op" is not supported in v0.1 minimal scope (only '
+        'comparisons ==/!=/</<=/>/>= and logical &&/||)',
+      ),
+    ];
+  }
+
+  final left = expression.leftOperand;
+  final right = expression.rightOperand;
+  final errors = <UnsupportedSyntaxError>[
+    ..._checkExpression(result, left),
+    ..._checkExpression(result, right),
+  ];
+  if (errors.isNotEmpty) return errors;
+
+  final leftType = left.staticType;
+  final rightType = right.staticType;
+
+  if (isLogical) {
+    if (!(leftType?.isDartCoreBool ?? false) ||
+        !(rightType?.isDartCoreBool ?? false)) {
+      errors.add(
+        _error(
+          result,
+          expression.offset,
+          '"$op" requires bool operands, got '
+          '"${leftType?.getDisplayString() ?? '?'}" and '
+          '"${rightType?.getDisplayString() ?? '?'}"',
+        ),
+      );
+    }
+    return errors;
+  }
+
+  if (leftType == null ||
+      rightType == null ||
+      !_sameComparableType(leftType, rightType)) {
+    errors.add(
+      _error(
+        result,
+        expression.offset,
+        '"$op" requires both operands to have the same type (int, double, '
+        'bool, or String), got "${leftType?.getDisplayString() ?? '?'}" and '
+        '"${rightType?.getDisplayString() ?? '?'}"',
+      ),
+    );
+    return errors;
+  }
+
+  if (isComparison && !(leftType.isDartCoreInt || leftType.isDartCoreDouble)) {
+    errors.add(
+      _error(
+        result,
+        expression.offset,
+        '"$op" is only supported for int and double operands, got '
+        '"${leftType.getDisplayString()}"',
+      ),
+    );
+  }
+  return errors;
+}
+
+bool _sameComparableType(DartType a, DartType b) =>
+    (a.isDartCoreInt && b.isDartCoreInt) ||
+    (a.isDartCoreDouble && b.isDartCoreDouble) ||
+    (a.isDartCoreBool && b.isDartCoreBool) ||
+    (a.isDartCoreString && b.isDartCoreString);
 
 /// The `@GoName` binding behind a reference to a Go constant or package
 /// variable: an `external` top-level getter (`red`) or an `external static`
