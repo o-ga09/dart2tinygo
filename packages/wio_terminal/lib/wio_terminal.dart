@@ -48,3 +48,44 @@ class Led {
   @GoName('Toggle')
   external void toggle();
 }
+
+/// Configures the three top buttons (A/B/C) and the 5-way switch as pull-up
+/// inputs, and returns a handle to poll them.
+@GoName('wio.NewButtons')
+external Buttons newButtons();
+
+/// One of the Wio Terminal's digital inputs: the three top buttons and the
+/// 5-way switch's five directions.
+@GoType('wio.Button')
+enum Button {
+  @GoName('wio.ButtonA')
+  a,
+  @GoName('wio.ButtonB')
+  b,
+  @GoName('wio.ButtonC')
+  c,
+  @GoName('wio.SwitchUp')
+  up,
+  @GoName('wio.SwitchDown')
+  down,
+  @GoName('wio.SwitchLeft')
+  left,
+  @GoName('wio.SwitchRight')
+  right,
+  @GoName('wio.SwitchPress')
+  press,
+}
+
+/// The three top buttons and the 5-way switch. Obtain one with [newButtons].
+@GoType('*wio.Buttons')
+class Buttons {
+  Buttons._();
+
+  /// Whether [button] is currently held down.
+  @GoName('IsPressed')
+  external bool isPressed(Button button);
+
+  /// Polls until [button] is pressed, debounced.
+  @GoName('WaitPressed')
+  external void waitPressed(Button button);
+}
