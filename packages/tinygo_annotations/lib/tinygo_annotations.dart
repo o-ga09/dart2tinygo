@@ -35,6 +35,10 @@ class GoImport {
 ///   on the enclosing library).
 /// - On an instance method of a `@GoType` class: the Go method name, e.g.
 ///   `@GoName('DrawText')`; it is invoked on the receiver.
+/// - On a top-level getter or a `static` getter of a `@GoType` class: a Go
+///   constant or package-level variable, fully qualified, e.g.
+///   `@GoName('wio.Red') external Color get red;`. It is emitted as a bare
+///   identifier, not a call.
 class GoName {
   const GoName(this.name);
 
@@ -45,7 +49,9 @@ class GoName {
 /// Maps a Dart class to a Go type, e.g. `@GoType('*wio.Display')`.
 ///
 /// Values of the class are only ever produced by `@GoName` functions and
-/// consumed by `@GoName` methods; the transpiler never constructs them itself.
+/// getters and consumed by `@GoName` methods and parameters; the transpiler
+/// never constructs them itself. The name is emitted verbatim, so both value
+/// types (`'wio.Color'`) and pointers (`'*wio.Display'`) work.
 class GoType {
   const GoType(this.name);
 

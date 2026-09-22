@@ -11,6 +11,49 @@ external Widget newWidget();
 @GoName('rt.Beep')
 external void beep(int times);
 
+/// Non-void results: each of these must be storable in a local and usable
+/// wherever an expression of that type is accepted.
+@GoName('rt.ReadLevel')
+external int readLevel();
+
+@GoName('rt.IsReady')
+external bool isReady();
+
+@GoName('rt.Voltage')
+external double voltage();
+
+@GoName('rt.Label')
+external String label();
+
+/// A value-type `@GoType` (no `*`): constructed by a binding function and
+/// passed by value.
+@GoName('rt.RGB')
+external Color rgb(int r, int g, int b);
+
+/// A Go package-level constant/variable, referenced as a bare identifier.
+@GoName('rt.Red')
+external Color get red;
+
+/// Missing `@GoName` on a constant getter: reported like a function.
+external Color get unnamedColor;
+
+@GoType('rt.Color')
+class Color {
+  Color._();
+}
+
+@GoType('rt.Button')
+class Button {
+  Button._();
+
+  /// A Go constant exposed as a static getter (`Button.a` → `rt.ButtonA`).
+  @GoName('rt.ButtonA')
+  external static Button get a;
+
+  @GoName('rt.ButtonB')
+  external static Button get b;
+}
+
 @GoType('*rt.Widget')
 class Widget {
   Widget._();
@@ -20,6 +63,18 @@ class Widget {
 
   @GoName('Hide')
   external void hide();
+
+  @GoName('Fill')
+  external void fill(Color color);
+
+  @GoName('Configure')
+  external void configure(bool enabled, double gain, String name);
+
+  @GoName('Press')
+  external bool press(Button button);
+
+  @GoName('Level')
+  external int level();
 }
 
 /// Missing `@GoName`: the checker must point at the annotation, not at the

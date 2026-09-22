@@ -8,18 +8,18 @@ Any PR that adds a language feature must update this table.
 
 | Feature | Status |
 | --- | --- |
-| Types: `int` | Implemented (minimal: `int`-typed locals only) |
-| Types: `double` / `bool` / `String` | Not implemented |
-| `var`, type inference | Implemented (minimal: `var x = <int literal>;` only) |
-| `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` (an `int` literal or a binding call) and emitted as `x := ...` |
+| Types: `int` | Implemented (locals, literals, binding results; no arithmetic yet) |
+| Types: `double` / `bool` / `String` | Partial: locals, literals, and binding results/arguments only (no arithmetic, comparison, or `String` operations yet) |
+| `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
+| `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
 | `while` | Implemented (minimal: `while (true)` only, no nesting) |
 | `if` / `for` / `switch` | Not implemented |
-| `print` | Implemented (minimal: string literal or interpolation of `int` locals) |
-| String interpolation | Implemented for `int`; other types not implemented |
+| `print` | Implemented (any `String` expression, or a string interpolation) |
+| String interpolation | Implemented for `int` / `bool` / `String` expressions; `double` not implemented |
 | Cascade `..` | Not implemented |
 | `Duration` and `sleep` | Implemented (`dart:io` `sleep()`, `Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`) |
-| Bindings via annotations | Implemented (minimal: `@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions and to methods on `@GoType` locals, with int/String literal or int local arguments — see [`writing_bindings.md`](./writing_bindings.md)) |
+| Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions and to methods on `@GoType` locals returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)). Chaining on call results not implemented |
 | `tinygo_machine`: LED, GPIO in/out, sleep | Not implemented |
 
 See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and

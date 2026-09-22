@@ -34,7 +34,9 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | `final d = newDisplay();`（`newDisplay` が `@GoName('wio.NewDisplay')`） | `d := wio.NewDisplay()`（`final`/`var` の違いはなし。`@GoType` は Go 側の型推論に任せる） |
 | `beep(3);`（`beep` が `@GoName('rt.Beep')`） | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');`（`drawText` が `@GoName('DrawText')`） | `d.DrawText(10, 20, "hi")` |
-| 引数: `int` リテラル / `String` リテラル / `int` ローカル変数 | そのまま出力：型なし定数 / Go 文字列リテラル / 識別子 |
+| `final n = sensor.read();` / `var ok = isReady();`（`int` / `double` / `bool` / `String` / `@GoType` の戻り値） | `n := sensor.Read()` / `ok := rt.IsReady()`（型は Go の推論に任せる。void 以外の戻り値を文として使った場合は捨てられる） |
+| `red` / `Button.a`（getter が `@GoName('rt.Red')` / `@GoName('rt.ButtonA')`） | `rt.Red` / `rt.ButtonA` — 呼び出しなしの識別子 |
+| 引数: `int` / `double` / `bool` / `String` のリテラル、ローカル変数、バインディング呼び出し、Go 定数の参照 | そのまま出力：型なし定数 / 識別子 / 呼び出し / 識別子。キャストは出さないので、Go 側の引数型は `int` / `float64` / `bool` / `string` か `@GoType` そのものにする |
 
 生成する `go.mod`：Dart パッケージに `go/go.mod` を同梱しているバインディングごとに
 `require <module> v0.0.0` と `replace <module> => <ローカル絶対パス>` を出力し、
@@ -57,10 +59,10 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 
 | Dart | Go | 状態 |
 | --- | --- | --- |
-| `int` | `int` | 実装済（リテラル／ローカル変数） |
-| `double` | `float64` | 決定 |
-| `bool` | `bool` | 決定 |
-| `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 決定 |
+| `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値） |
+| `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値。算術・補間は未実装） |
+| `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値。演算子・`if` は未実装） |
+| `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値。操作は未実装） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
 | `List<T>` | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
 | `enum` | `type E int` + `const ( ... iota )`。`.index` は値そのもの、`.name` は文字列テーブル | 決定（v0.2） |
@@ -80,11 +82,11 @@ Go の式一つで表せない意味論は、`packages/dart2tinygo/go/` の小�
 `strconv.FormatFloat` は `1`）、`Mod`（Dart の `%`）。これは言語意味論でありボード知識ではないので、
 本体にボード固有コードを入れない原則には反しない。
 
-## 文字列補間（`int` は実装済み、それ以外は決定済み）
+## 文字列補間（`int` / `bool` / `String` は実装済み、`double` は決定済み）
 
 - `fmt.Sprintf` は使わない。型に応じて `strconv` 等で連結する（TinyGo のバイナリ肥大化を防ぐため）。
-- 実装済み：`int` 型の補間式は `strconv.Itoa`。
-- 決定：`bool` → `strconv.FormatBool`、`double` → `dartrt.FormatDouble`、`String` → そのまま。ローカル変数だけでなく、これらの型の任意の式。
+- 実装済み：`int` → `strconv.Itoa`、`bool` → `strconv.FormatBool`、`String` → そのまま。補間式はローカル変数に限らず、対応している値の式（リテラル、ローカル変数、バインディング呼び出し、Go 定数）なら何でもよい。`print(s)` も同様に任意の `String` 式を受け付ける。
+- 決定：`double` → `dartrt.FormatDouble`（`dartrt` ランタイム待ち）。
 
 ## 生成する `go.mod`
 
