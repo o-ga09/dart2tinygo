@@ -1,0 +1,13 @@
+name: wioterminal_demo
+description: A menu-driven demo that exercises every Wio Terminal binding, via dart2tinygo.
+version: 0.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+resolution: workspace
+
+dependencies:
+  # Resolved to ../../packages/wio_terminal by the workspace. Outside this
+  # repository, depend on the published package instead.
+  wio_terminal: ^0.0.1

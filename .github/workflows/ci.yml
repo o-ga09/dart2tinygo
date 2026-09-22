@@ -138,3 +138,14 @@ jobs:
         if: matrix.target == 'wioterminal'
         working-directory: /tmp/dart2tinygo-hello-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises every wio_terminal binding in one build (#24); needs
+      # -stack-size=4KB for the Wi-Fi/HTTP menu item (see wifi.dart).
+      - name: dart2tinygo build (examples/wioterminal_demo)
+        if: matrix.target == 'wioterminal'
+        run: |
+          cd packages/dart2tinygo
+          dart run bin/dart2tinygo.dart build ../../examples/wioterminal_demo/main.dart -o /tmp/dart2tinygo-demo-out
+      - name: tinygo build examples/wioterminal_demo
+        if: matrix.target == 'wioterminal'
+        working-directory: /tmp/dart2tinygo-demo-out
+        run: tinygo build -target=${{ matrix.target }} -stack-size=4KB -o firmware.bin .

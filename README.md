@@ -72,6 +72,10 @@ declarations annotated with `@GoImport` / `@GoName` / `@GoType`; the
 transpiler core knows nothing about the board. See
 [Writing bindings](./docs/writing_bindings.md).
 
+For a single program that exercises every Wio Terminal binding (LED,
+buttons, buzzer, light/mic sensors, accelerometer, IR, microSD, Wi-Fi/HTTP)
+behind one menu, see [`examples/wioterminal_demo`](./examples/wioterminal_demo).
+
 ## Numeric semantics
 
 `int` maps to Go's `int`, which is **platform-width**: 64-bit on a desktop,
@@ -90,7 +94,7 @@ packages/
   tinygo_annotations/  # Annotations for bindings (@GoImport / @GoName / @GoType)
   tinygo_machine/       # Board-agnostic bindings for TinyGo's common machine package
   wio_terminal/         # Seeed Wio Terminal binding (LCD), Dart annotations + Go runtime
-examples/               # Samples (hello_wioterminal, blinky, etc.)
+examples/               # Samples (hello_wioterminal, blinky, button_led, wioterminal_demo)
 docs/                   # Supported features, conversion rules, how to write bindings
 ```
 
