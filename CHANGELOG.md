@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.3](https://github.com/o-ga09/dart2tinygo/compare/v0.0.2...v0.0.3) - 2026-09-22
+
+- fix: enable pub.dev publishing for tinygo_machine by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/52
+
 ## [v0.0.2](https://github.com/o-ga09/dart2tinygo/compare/v0.0.1...v0.0.2) - 2026-09-22
 
 - feat: remaining tinygo_machine/wio_terminal bindings (#44, #12-20, #22-23) by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/46
