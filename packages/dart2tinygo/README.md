@@ -2,6 +2,8 @@
 
 **Languages:** English | [日本語](./README.ja.md)
 
+[![pub package](https://img.shields.io/pub/v/dart2tinygo.svg)](https://pub.dev/packages/dart2tinygo)
+
 The CLI and the Dart → Go transpiler engine itself.
 
 - `bin/`: CLI entry point (`build`, `check`, and `flash` implemented)

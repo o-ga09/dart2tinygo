@@ -2,6 +2,8 @@
 
 **Languages:** English | [日本語](./README.ja.md)
 
+[![pub package](https://img.shields.io/pub/v/wio_terminal.svg)](https://pub.dev/packages/wio_terminal)
+
 dart2tinygo binding for the [Seeed Wio Terminal](https://wiki.seeedstudio.com/Wio-Terminal-Getting-Started/).
 The Dart side (`lib/wio_terminal.dart`) is annotations only; the behaviour is
 the TinyGo package in `go/` (`github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`, imported as `wio`).

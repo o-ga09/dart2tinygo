@@ -2,6 +2,8 @@
 
 **Languages:** English | [日本語](./README.ja.md)
 
+[![pub package](https://img.shields.io/pub/v/tinygo_annotations.svg)](https://pub.dev/packages/tinygo_annotations)
+
 Annotations (`@GoImport` / `@GoName` / `@GoType`) that let binding authors declare the Go-side counterparts from the Dart side.
 
 ```dart

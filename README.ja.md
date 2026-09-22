@@ -2,6 +2,10 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/dart2tinygo.svg)](https://pub.dev/packages/dart2tinygo)
+[![pub package](https://img.shields.io/pub/v/tinygo_annotations.svg)](https://pub.dev/packages/tinygo_annotations)
+[![pub package](https://img.shields.io/pub/v/wio_terminal.svg)](https://pub.dev/packages/wio_terminal)
+
 Dart のサブセットを TinyGo のソースコードに変換し、マイコンで動かすための OSS です。
 
 > **Status:** 初期構築中。v0.1 最小変換は実装済みです（トップレベルの

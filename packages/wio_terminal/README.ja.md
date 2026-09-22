@@ -2,6 +2,8 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/wio_terminal.svg)](https://pub.dev/packages/wio_terminal)
+
 [Seeed Wio Terminal](https://wiki.seeedstudio.com/Wio-Terminal-Getting-Started/) 向けの dart2tinygo バインディング。
 Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下の TinyGo パッケージ
 （`github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`、import 名は `wio`）です。

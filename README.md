@@ -2,6 +2,10 @@
 
 **Languages:** English | [日本語](./README.ja.md)
 
+[![pub package](https://img.shields.io/pub/v/dart2tinygo.svg)](https://pub.dev/packages/dart2tinygo)
+[![pub package](https://img.shields.io/pub/v/tinygo_annotations.svg)](https://pub.dev/packages/tinygo_annotations)
+[![pub package](https://img.shields.io/pub/v/wio_terminal.svg)](https://pub.dev/packages/wio_terminal)
+
 An OSS transpiler that converts a subset of Dart into TinyGo source code, so it can run on microcontrollers.
 
 > **Status:** Early scaffolding. The v0.1 minimal transpile is implemented — a

@@ -2,6 +2,8 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/tinygo_annotations.svg)](https://pub.dev/packages/tinygo_annotations)
+
 バインディング作者が Dart 側から Go 側の対応先を宣言するための注釈（`@GoImport` / `@GoName` / `@GoType`）を提供するパッケージ。
 
 ```dart

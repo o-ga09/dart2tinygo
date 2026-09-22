@@ -2,6 +2,8 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/dart2tinygo.svg)](https://pub.dev/packages/dart2tinygo)
+
 CLI と Dart → Go 変換エンジン本体。
 
 - `bin/`: CLI エントリポイント（`build`・`check`・`flash` 実装済み）
