@@ -194,4 +194,5 @@ Dart 側の宣言と Go 側のシグネチャは手で同期してください�
 - `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）、ADC（`newAdc` / `read`）、PWM（`newPwm` / `setDuty`）を実装済み（#21、#44）。`examples/blinky` が利用。
 - `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD（FAT）バインディング。上記の方針に従い専用の Go サブパッケージ／Dart ライブラリに分離（#19）。
 - `packages/wio_terminal/lib/wifi.dart` + `go/wifi`: Wi-Fi（RTL8720DN）+ HTTP バインディング。同様に分離（#20）。
+- `packages/wio_terminal/lib/hid.dart` + `go/hid`: USB HIDキーボード/マウス。同様に分離。ここではバイナリサイズよりも、シリアルのみを使うプログラムでHIDディスクリプタを一切有効化させないことが目的（#23）。
 - `packages/wio_terminal/lib/pins.dart`: 40ピンヘッダー／Grove ポートのピン定数。上記の方針に従い `tinygo_machine` の `Pin` 型を共有（#22）。

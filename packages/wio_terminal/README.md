@@ -37,6 +37,8 @@ Currently provided:
 | `newAccelerometer()` | `wio.NewAccelerometer()` | Configure I2C1 + the LIS3DHTR (address 0x18, +-2G) |
 | `Accelerometer.update()` | `(*Accelerometer).Update()` | Read and cache all three axes |
 | `.x()`/`.y()`/`.z()`, `.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`, `.XMilliG()`/... | The cached reading, in G or milli-G |
+| `serialAvailable()` | `wio.SerialAvailable()` | Bytes currently buffered on the USB CDC serial connection |
+| `serialReadLine()` | `wio.SerialReadLine()` | Blocks until a `'\n'`-terminated line is read from USB CDC serial |
 
 `lib/sd.dart` (a separate library, `import 'package:wio_terminal/sd.dart';`) provides the microSD binding, kept out of `wio_terminal.dart` so a program that doesn't use it doesn't pull in `tinygo.org/x/tinyfs/fatfs`'s cgo FAT implementation:
 
@@ -63,6 +65,15 @@ Currently provided:
 | --- | --- | --- |
 | `WioPins.d0`...`.d8` | `wio.D0`...`D8` | The digital pins of the 40-pin header (and the Grove digital port, `D0`/`D1`) |
 | `WioPins.a0`...`.a8` | `wio.A0`...`A8` | The analog pins of the 40-pin header (and the Grove analog port, `A0`/`A1`) |
+
+`lib/hid.dart` (`import 'package:wio_terminal/hid.dart';`) provides USB HID keyboard/mouse, kept out of `wio_terminal.dart` because merely importing the underlying `machine/usb/hid/keyboard`/`.../mouse` packages enables that USB HID descriptor (via their own `init()`), which can affect USB CDC behaviour, including `tinygo flash`'s auto-reset. Device-mode only (no USB host support in TinyGo):
+
+| Dart | Go | Purpose |
+| --- | --- | --- |
+| `newKeyboard()` | `wiohid.NewKeyboard()` | A handle to the USB HID keyboard interface |
+| `Keyboard.write(text)` / `.press(keycode)` | `(*Keyboard).Write(text)` / `.Press(keycode)` | Type text, or press-and-release a raw HID keycode |
+| `newMouse()` | `wiohid.NewMouse()` | A handle to the USB HID mouse interface |
+| `Mouse.move(dx, dy)` / `.click()` | `(*Mouse).Move(dx, dy)` / `.Click()` | Move the cursor, or click the left button |
 
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 

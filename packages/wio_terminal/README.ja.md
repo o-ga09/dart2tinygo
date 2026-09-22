@@ -37,6 +37,8 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `newAccelerometer()` | `wio.NewAccelerometer()` | I2C1 + LIS3DHTR（アドレス0x18、±2G）を設定 |
 | `Accelerometer.update()` | `(*Accelerometer).Update()` | 3軸をまとめて読み取りキャッシュする |
 | `.x()`/`.y()`/`.z()`、`.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`、`.XMilliG()`/... | キャッシュ値（G またはミリG） |
+| `serialAvailable()` | `wio.SerialAvailable()` | USB CDCシリアル接続で現在バッファされているバイト数 |
+| `serialReadLine()` | `wio.SerialReadLine()` | USB CDCシリアルから `'\n'` 区切りの1行を読むまでブロック |
 
 `lib/sd.dart`（別ライブラリ、`import 'package:wio_terminal/sd.dart';`）は microSD バインディングを提供する。`wio_terminal.dart` には含めず分離しているのは、使わないプログラムまで `tinygo.org/x/tinyfs/fatfs` の cgo による FAT 実装を巻き込まないようにするため：
 
@@ -63,6 +65,15 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | --- | --- | --- |
 | `WioPins.d0`...`.d8` | `wio.D0`...`D8` | 40ピンヘッダーのデジタルピン（Groveデジタルポート `D0`/`D1` も含む） |
 | `WioPins.a0`...`.a8` | `wio.A0`...`A8` | 40ピンヘッダーのアナログピン（Groveアナログポート `A0`/`A1` も含む） |
+
+`lib/hid.dart`（`import 'package:wio_terminal/hid.dart';`）はUSB HIDキーボード/マウスを提供する。`wio_terminal.dart` には含めていないのは、`machine/usb/hid/keyboard`/`.../mouse` を import するだけでそのUSB HIDディスクリプタが（それぞれの `init()` により）有効化され、`tinygo flash` が使うオートリセットを含むUSB CDCの挙動に影響し得るため。デバイスモードのみ（TinyGoはUSBホストをサポートしない）：
+
+| Dart | Go | 用途 |
+| --- | --- | --- |
+| `newKeyboard()` | `wiohid.NewKeyboard()` | USB HIDキーボードインタフェースへのハンドル |
+| `Keyboard.write(text)` / `.press(keycode)` | `(*Keyboard).Write(text)` / `.Press(keycode)` | テキストを入力、または生のHIDキーコードをpress-and-release |
+| `newMouse()` | `wiohid.NewMouse()` | USB HIDマウスインタフェースへのハンドル |
+| `Mouse.move(dx, dy)` / `.click()` | `(*Mouse).Move(dx, dy)` / `.Click()` | カーソル移動、または左ボタンをクリック |
 
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 

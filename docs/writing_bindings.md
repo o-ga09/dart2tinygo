@@ -196,4 +196,5 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 - `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`), ADC (`newAdc` / `read`), and PWM (`newPwm` / `setDuty`) implemented (#21, #44). Used by `examples/blinky`.
 - `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD (FAT) binding, split into its own Go sub-package/Dart library per the section above (#19).
 - `packages/wio_terminal/lib/wifi.dart` + `go/wifi`: Wi-Fi (RTL8720DN) + HTTP binding, same split (#20).
+- `packages/wio_terminal/lib/hid.dart` + `go/hid`: USB HID keyboard/mouse, same split — here to keep a plain-serial-only program from enabling the HID descriptor at all, rather than for binary size (#23).
 - `packages/wio_terminal/lib/pins.dart`: 40-pin-header/Grove pin constants, sharing `tinygo_machine`'s `Pin` type per the section above (#22).

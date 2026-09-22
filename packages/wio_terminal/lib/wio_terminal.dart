@@ -250,6 +250,17 @@ class Microphone {
   external int readLevel(int windowMs);
 }
 
+/// The number of bytes currently buffered on the USB CDC serial connection,
+/// ready to read.
+@GoName('wio.SerialAvailable')
+external int serialAvailable();
+
+/// Blocks until a newline (`'\n'`) is read from the USB CDC serial
+/// connection, and returns the line without the trailing newline (or a
+/// trailing carriage return, if present).
+@GoName('wio.SerialReadLine')
+external String serialReadLine();
+
 /// Configures I2C1 and the built-in 3-axis accelerometer LIS3DHTR (address
 /// 0x18) at a +-2G range, and returns a handle to read it.
 @GoName('wio.NewAccelerometer')
