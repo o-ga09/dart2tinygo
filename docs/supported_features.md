@@ -15,7 +15,7 @@ Any PR that adds a language feature must update this table.
 | Types: `List<int>` | Implemented (maps to Go `[]byte` — see [`mapping.md`](./mapping.md#listint-decided-2026-09-22-implemented); literals, index read/write, `.length`, `.add()`; other element types not implemented) |
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
-| Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
+| Top-level functions, `main` | Implemented — a single parameterless `void main()`, plus any number of other top-level functions with positional parameters, `int`/`double`/`bool`/`String`/`List<int>`/`@GoType`/`void` types, block or expression (`=>`) bodies, `return`, recursion, and forward references. Named/optional/default-valued parameters not implemented (see [`mapping.md`](./mapping.md)) |
 | `while` | Implemented (any `bool` condition, e.g. `while (count < 10)`; nesting allowed) |
 | `for` (C-style) | Implemented (`for (var i = <init>; cond; updater)`; exactly one declared loop variable and one updater — Go's post-clause is a single statement; `for-in` not implemented) |
 | `break` / `continue` | Implemented (unlabeled only) |
