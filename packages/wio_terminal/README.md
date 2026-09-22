@@ -15,6 +15,8 @@ Currently provided:
 | `newDisplay()` | `wio.NewDisplay()` | Configure SPI3 + the ILI9341 LCD (landscape, backlight on, cleared to black) |
 | `Display.clear()` | `(*Display).Clear()` | Fill the screen with black |
 | `Display.drawText(x, y, text)` | `(*Display).DrawText(x, y, text)` | Draw white text (FreeMono Bold 12pt) with its baseline at (x, y) |
+| `newLed()` | `wio.NewLed()` | Configure the user LED (blue, `machine.LED`) as an output |
+| `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | Drive the user LED |
 
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 

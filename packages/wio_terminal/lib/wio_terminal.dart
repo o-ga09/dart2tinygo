@@ -28,3 +28,23 @@ class Display {
   @GoName('DrawText')
   external void drawText(int x, int y, String text);
 }
+
+/// Configures the Wio Terminal's own user LED (blue) as an output and
+/// returns a handle to control it.
+@GoName('wio.NewLed')
+external Led newLed();
+
+/// The Wio Terminal's own user LED (blue). Obtain one with [newLed].
+@GoType('*wio.Led')
+class Led {
+  Led._();
+
+  @GoName('On')
+  external void on();
+
+  @GoName('Off')
+  external void off();
+
+  @GoName('Toggle')
+  external void toggle();
+}
