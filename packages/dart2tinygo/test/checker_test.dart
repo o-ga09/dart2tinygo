@@ -350,15 +350,23 @@ void main() {
       expect(errors.single.reason, contains('int'));
     });
 
-    test('reports unary minus on a non-int operand', () async {
-      final errors = await checkSource('''
+    // `var y = -s;` for a String `s` doesn't reach this check at all: Dart's
+    // own analyzer has no `String.operator-`, so `y`'s inferred type is
+    // already `InvalidType` and the surrounding local-variable check
+    // rejects it first. A binding-call argument isn't gated that way, so
+    // it reaches this code path directly.
+    test('reports unary minus on a non-numeric operand', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
 void main() {
-  var x = 1.5;
-  var y = -x;
+  final widget = newWidget();
+  var s = 'hi';
+  widget.fill(-s);
 }
 ''');
       expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('int'));
+      expect(errors.single.reason, contains('int/double'));
     });
 
     test('reports %= and ~/= on a double local', () async {
@@ -370,6 +378,179 @@ void main() {
 ''');
       expect(errors, hasLength(1));
       expect(errors.single.reason, contains('int'));
+    });
+  });
+
+  group('double arithmetic and int/double conversion', () {
+    test('accepts + - * / on matching double operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1.5;
+  var b = 2.5;
+  var sum = a + b;
+  var diff = a - b;
+  var prod = a * b;
+  var quot = a / b;
+  print('\$sum \$diff \$prod \$quot');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts nested and parenthesized double arithmetic', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1.0;
+  var b = 2.0;
+  var c = 3.0;
+  var result = (a + b) * c / a;
+  print('\$result');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts double arithmetic inside a comparison', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1.0;
+  var b = 2.0;
+  if (a / b > 0.25) {
+    print('big enough');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts unary minus on a double local', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1.5;
+  var b = -a;
+  print('\$b');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports / on int operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var b = 2;
+  var q = a / b;
+  print('\$q');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('double'));
+    });
+
+    test('reports + - * on mixed int/double operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var b = 2.0;
+  var sum = a + b;
+  print('\$sum');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
+      expect(errors.single.reason, contains('double'));
+    });
+
+    test('accepts toDouble() on an int expression', () async {
+      final errors = await checkSource('''
+void main() {
+  var raw = 5;
+  var scaled = raw.toDouble() / 2.0;
+  print('\$scaled');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts toInt() and round() on a double expression', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 3.7;
+  var truncated = x.toInt();
+  var rounded = x.round();
+  print('\$truncated \$rounded');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a conversion result used directly, without a local',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  var raw = 5;
+  print('\${raw.toDouble()}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports toDouble() on a double receiver', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  var y = x.toDouble();
+  print('\$y');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int receiver'));
+    });
+
+    test('reports toInt() on an int receiver', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1;
+  var y = x.toInt();
+  print('\$y');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('double receiver'));
+    });
+
+    test('reports round() on an int receiver', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1;
+  var y = x.round();
+  print('\$y');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('double receiver'));
+    });
+
+    test('reports arguments passed to toDouble()', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1;
+  var y = x.toDouble(2);
+  print('\$y');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('no arguments'));
+    });
+
+    test('accepts double string interpolation', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  print('x=\$x');
+}
+''');
+      expect(errors, isEmpty);
     });
   });
 
@@ -578,19 +759,37 @@ void main() {
   });
 
   group('compound assignment', () {
-    test('accepts += -= *= /= on matching int/double locals', () async {
+    test('accepts += -= *= on matching int/double locals', () async {
       final errors = await checkSource('''
 void main() {
   var i = 0;
   i += 1;
   i -= 1;
   i *= 2;
-  i /= 2;
   var x = 1.0;
   x += 0.5;
+  x -= 0.5;
+  x *= 2.0;
+  x /= 2.0;
 }
 ''');
       expect(errors, isEmpty);
+    });
+
+    // Dart's `/` (and therefore `/=`) always returns double, even for two
+    // ints — `i /= 2;` on an int `i` is a genuine Dart compile error
+    // ("A value of type 'double' can't be assigned to a variable of type
+    // 'int'"), not merely unsupported syntax. Verified with `dart analyze`
+    // against this exact snippet.
+    test('reports /= on an int target', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  i /= 2;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('double'));
     });
 
     test('reports a compound assignment with a mismatched rhs type', () async {
@@ -625,18 +824,6 @@ void main() {
       expect(errors, hasLength(1));
       expect(errors.single.reason, contains('"&="'));
     });
-  });
-
-  test('reports double interpolation as not supported yet', () async {
-    final errors = await checkSource('''
-void main() {
-  var ratio = 0.5;
-  print('r=\$ratio');
-}
-''');
-    expect(errors, hasLength(1));
-    expect(errors.single.line, 3);
-    expect(errors.single.reason, contains('double'));
   });
 
   group('annotation bindings', () {
@@ -697,8 +884,7 @@ void main() {
       expect(errors.single.reason, contains('no @GoName annotation'));
     });
 
-    test('reports binding results of unsupported types in interpolation',
-        () async {
+    test('accepts a double binding result in interpolation', () async {
       final errors = await checkBindingSource('''
 import 'package:test_binding/test_binding.dart';
 
@@ -706,8 +892,20 @@ void main() {
   print('v=\${voltage()}');
 }
 ''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports binding results of unsupported types in interpolation',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  print('c=\${rgb(1, 2, 3)}');
+}
+''');
       expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('double'));
+      expect(errors.single.reason, contains('Color'));
     });
 
     test('reports external functions without @GoName', () async {

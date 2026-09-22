@@ -299,6 +299,8 @@ String _writePrintArgument(Expression argument, GoDeps deps) {
         } else if (type.isDartCoreBool) {
           deps.imports['strconv'] = null;
           parts.add('strconv.FormatBool($value)');
+        } else if (type.isDartCoreDouble) {
+          parts.add('${_useDartrt(deps)}.FormatDouble($value)');
         } else {
           throw StateError(
               'unchecked interpolation of ${type.getDisplayString()}');
@@ -360,6 +362,8 @@ String _writeExpression(Expression expression, GoDeps deps) {
     return expression.name;
   }
   if (expression is MethodInvocation) {
+    final conversion = _writeNumConversion(expression, deps);
+    if (conversion != null) return conversion;
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) return bound;
   }
@@ -398,6 +402,34 @@ String? _writeConstantReference(Identifier reference, GoDeps deps) {
   if (binding == null) return null;
   _useImport(binding.import, deps);
   return binding.goName;
+}
+
+/// `.toDouble()`/`.toInt()`/`.round()` (`docs/mapping.md`): `int.toDouble()`
+/// → `float64(x)`, `double.toInt()` → `int(x)` (Go's int-from-float64
+/// conversion truncates toward zero, like Dart's), `double.round()` →
+/// `int(math.Round(x))` (Go's `math.Round` rounds half away from zero, like
+/// Dart's). The checker (`_checkNumConversion`) already confirmed the
+/// receiver type and zero-argument shape, so this only needs to recognize
+/// the same three names by receiver type — same disambiguation, so an
+/// ordinary call that merely shares one of these names (receiver not
+/// int/double) safely falls through to [_writeBoundCall] instead.
+String? _writeNumConversion(MethodInvocation call, GoDeps deps) {
+  final target = call.target;
+  if (target == null) return null;
+  final targetType = target.staticType;
+  if (targetType == null) return null;
+  final value = _writeExpression(target, deps);
+  switch (call.methodName.name) {
+    case 'toDouble' when targetType.isDartCoreInt:
+      return 'float64($value)';
+    case 'toInt' when targetType.isDartCoreDouble:
+      return 'int($value)';
+    case 'round' when targetType.isDartCoreDouble:
+      deps.imports['math'] = null;
+      return 'int(math.Round($value))';
+    default:
+      return null;
+  }
 }
 
 /// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes

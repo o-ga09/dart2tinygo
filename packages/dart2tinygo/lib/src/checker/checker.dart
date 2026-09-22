@@ -27,8 +27,10 @@ class UnsupportedSyntaxError {
 /// v0.1 minimal scope only: a single `void main()` containing
 /// `int`/`double`/`bool`/`String` locals, `while (cond)`, a single-variable
 /// C-style `for`, `break`/`continue`, `if`/`else if`/`else`, comparison
-/// (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`/`!`), and compound
-/// assignment (`+=`/`-=`/`*=`/`/=`) operators, `print(...)`,
+/// (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`/`!`), arithmetic
+/// (`+`/`-`/`*`/`~/`/`%`/`/`, `int`/`double` not mixed), compound assignment
+/// (`+=`/`-=`/`*=`/`/=`/`%=`/`~/=`), and `int`⇄`double` conversion
+/// (`.toDouble()`/`.toInt()`/`.round()`) operators, `print(...)`,
 /// `sleep(Duration(...))`, and calls into annotation bindings (`@GoImport` /
 /// `@GoName` / `@GoType`, see `docs/writing_bindings.md`). Everything else
 /// is reported here, up front, rather than discovered mid-conversion.
@@ -365,6 +367,12 @@ const _compoundAssignmentOperators = {'+=', '-=', '*=', '/=', '%=', '~/='};
 /// and Dart's floating-point `~/` isn't implemented.
 const _intOnlyCompoundAssignmentOperators = {'%=', '~/='};
 
+/// `/=` only makes sense on `double`: Dart's `/` always returns `double`
+/// (`num.operator/`), so `int /= anything` is invalid Dart (a `double`
+/// can't be assigned back to an `int` variable) — `~/=` is the truncating
+/// counterpart for `int`.
+const _doubleOnlyCompoundAssignmentOperators = {'/='};
+
 List<UnsupportedSyntaxError> _checkCompoundAssignment(
   ResolvedUnitResult result,
   AssignmentExpression expression,
@@ -412,6 +420,19 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
         target.offset,
         '"$op" is only supported on int locals, got '
         '"${targetType.getDisplayString()}"',
+      ),
+    ];
+  }
+  if (_doubleOnlyCompoundAssignmentOperators.contains(op) &&
+      !targetType.isDartCoreDouble) {
+    return [
+      _error(
+        result,
+        target.offset,
+        '"$op" is only supported on double locals in v0.1 minimal scope '
+        '(Dart\'s "/" always returns double), got '
+        '"${targetType.getDisplayString()}"; did you mean "~/=" for '
+        'truncating int division?',
       ),
     ];
   }
@@ -520,9 +541,11 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
           return _checkSleepCall(result, expression);
       }
     }
-    if (_bindingOf(expression) != null ||
+    if (_checkNumConversion(result, expression) != null ||
+        _bindingOf(expression) != null ||
         _describeBindingProblem(expression) != null) {
-      // A binding call as a statement; a non-void result is discarded.
+      // A conversion or binding call as a statement; a non-void result is
+      // discarded.
       return _checkExpression(result, expression);
     }
   }
@@ -640,6 +663,8 @@ List<UnsupportedSyntaxError> _checkExpression(
     }
   }
   if (expression is MethodInvocation) {
+    final conversion = _checkNumConversion(result, expression);
+    if (conversion != null) return conversion;
     if (_bindingOf(expression) != null) {
       return _checkBoundCall(result, expression);
     }
@@ -676,13 +701,13 @@ List<UnsupportedSyntaxError> _checkExpression(
     final operandErrors = _checkExpression(result, operand);
     if (operandErrors.isNotEmpty) return operandErrors;
     final type = operand.staticType;
-    if (type == null || !type.isDartCoreInt) {
+    if (type == null || !(type.isDartCoreInt || type.isDartCoreDouble)) {
       return [
         _error(
           result,
           operand.offset,
           'unary "-" operand has type "${type?.getDisplayString() ?? '?'}", '
-          'but v0.1 minimal scope only supports int',
+          'but v0.1 minimal scope only supports int/double',
         ),
       ];
     }
@@ -704,22 +729,27 @@ const _comparisonOperators = {'<', '<=', '>', '>='};
 const _equalityOperators = {'==', '!='};
 const _logicalOperators = {'&&', '||'};
 
-/// `+`/`-`/`*`/`~/`/`%`, `int` only for now — `double` arithmetic is #9's
-/// job. `~/` maps to Go's `/` (both truncate toward zero); `%` goes through
-/// `dartrt.Mod` because Dart's `%` is never negative, unlike Go's
-/// (`docs/mapping.md`, "Numeric semantics").
-const _arithmeticOperators = {'+', '-', '*', '~/', '%'};
+/// `+`/`-`/`*`: `int`/`int` or `double`/`double` (not mixed). `~/`/`%`:
+/// `int` only — `~/` maps to Go's `/` (both truncate toward zero), `%` goes
+/// through `dartrt.Mod` because Dart's `%` is never negative, unlike Go's
+/// (`docs/mapping.md`, "Numeric semantics"). `/`: `double`/`double` only —
+/// Dart's `/` always returns `double` even for two `int`s, which the
+/// generator can't reproduce without a cast, so an `int` operand is
+/// rejected rather than silently promoted (convert with `.toDouble()`).
+const _arithmeticOperators = {'+', '-', '*', '~/', '%', '/'};
+const _intOnlyArithmeticOperators = {'~/', '%'};
 
-/// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`), and `int`
-/// arithmetic (`+`/`-`/`*`/`~/`/`%`) binary operators map 1:1 onto Go (or,
-/// for `%`, onto `dartrt.Mod`), which uses the same tokens
+/// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`), and `int`/
+/// `double` arithmetic (`+`/`-`/`*`/`~/`/`%`/`/`) binary operators map 1:1
+/// onto Go (or, for `%`, onto `dartrt.Mod`), which uses the same tokens
 /// (`docs/mapping.md`). Every other operator (bitwise, `String`
-/// concatenation `+`, `double` arithmetic) is out of v0.1 minimal scope.
+/// concatenation `+`) is out of v0.1 minimal scope.
 ///
-/// To keep the generator cast-free, both operands of a comparison or
-/// equality must have the *same* supported type — no implicit `int`/`double`
-/// promotion the way Dart's `num` hierarchy allows. `<`/`<=`/`>`/`>=` are
-/// further restricted to `int`/`double`, matching Go's ordering operators.
+/// To keep the generator cast-free, both operands of a comparison,
+/// equality, or arithmetic operator must have the *same* supported type —
+/// no implicit `int`/`double` promotion the way Dart's `num` hierarchy
+/// allows. `<`/`<=`/`>`/`>=` are further restricted to `int`/`double`,
+/// matching Go's ordering operators.
 List<UnsupportedSyntaxError> _checkBinaryExpression(
   ResolvedUnitResult result,
   BinaryExpression expression,
@@ -735,8 +765,8 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
         result,
         expression.offset,
         'binary operator "$op" is not supported in v0.1 minimal scope (only '
-        'comparisons ==/!=/</<=/>/>=, logical &&/||, and int arithmetic '
-        '+/-/*/~///%)',
+        'comparisons ==/!=/</<=/>/>=, logical &&/||, and arithmetic '
+        '+, -, *, ~/, %, /)',
       ),
     ];
   }
@@ -769,17 +799,49 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
   }
 
   if (isArithmetic) {
-    if (!(leftType?.isDartCoreInt ?? false) ||
-        !(rightType?.isDartCoreInt ?? false)) {
-      errors.add(
-        _error(
-          result,
-          expression.offset,
-          '"$op" is only supported for int operands in v0.1 minimal scope, '
-          'got "${leftType?.getDisplayString() ?? '?'}" and '
-          '"${rightType?.getDisplayString() ?? '?'}"',
-        ),
-      );
+    if (op == '/') {
+      if (!(leftType?.isDartCoreDouble ?? false) ||
+          !(rightType?.isDartCoreDouble ?? false)) {
+        errors.add(
+          _error(
+            result,
+            expression.offset,
+            '"/" requires double operands in v0.1 minimal scope (Dart\'s "/" '
+            'always returns double, even for two ints; convert with '
+            '.toDouble() first), got "${leftType?.getDisplayString() ?? '?'}" '
+            'and "${rightType?.getDisplayString() ?? '?'}"',
+          ),
+        );
+      }
+    } else if (_intOnlyArithmeticOperators.contains(op)) {
+      if (!(leftType?.isDartCoreInt ?? false) ||
+          !(rightType?.isDartCoreInt ?? false)) {
+        errors.add(
+          _error(
+            result,
+            expression.offset,
+            '"$op" is only supported for int operands in v0.1 minimal scope, '
+            'got "${leftType?.getDisplayString() ?? '?'}" and '
+            '"${rightType?.getDisplayString() ?? '?'}"',
+          ),
+        );
+      }
+    } else {
+      final bothInt = (leftType?.isDartCoreInt ?? false) &&
+          (rightType?.isDartCoreInt ?? false);
+      final bothDouble = (leftType?.isDartCoreDouble ?? false) &&
+          (rightType?.isDartCoreDouble ?? false);
+      if (!bothInt && !bothDouble) {
+        errors.add(
+          _error(
+            result,
+            expression.offset,
+            '"$op" requires both operands to be int, or both double, in '
+            'v0.1 minimal scope, got "${leftType?.getDisplayString() ?? '?'}" '
+            'and "${rightType?.getDisplayString() ?? '?'}"',
+          ),
+        );
+      }
     }
     return errors;
   }
@@ -828,6 +890,71 @@ GoBinding? _constantBindingOf(Identifier reference) {
   return goBindingOf(element);
 }
 
+/// `num` conversion methods bridging `int` and `double`
+/// (`docs/mapping.md`): `int.toDouble()` (→ Go `float64(x)`),
+/// `double.toInt()` (→ `int(x)`, truncating like Dart's), `double.round()`
+/// (→ `int(math.Round(x))`, rounding half away from zero like Dart's).
+/// Receiver types are restricted to the direction each conversion actually
+/// bridges — `toDouble()` on an already-`double` value, or `toInt()`/
+/// `round()` on an already-`int` value, are pointless identities nobody
+/// writes in this domain and are rejected rather than generating a
+/// redundant cast.
+///
+/// Returns `null` (not `[]`) when [call] isn't one of these three methods,
+/// so the caller falls through to its usual binding-call handling instead
+/// of treating every unrecognized call as a conversion error.
+List<UnsupportedSyntaxError>? _checkNumConversion(
+  ResolvedUnitResult result,
+  MethodInvocation call,
+) {
+  final name = call.methodName.name;
+  final target = call.target;
+  if (target == null) return null;
+  final String requiredType;
+  switch (name) {
+    case 'toDouble':
+      requiredType = 'int';
+    case 'toInt':
+    case 'round':
+      requiredType = 'double';
+    default:
+      return null;
+  }
+  // Only treat this as a conversion when the receiver is already int/double
+  // — otherwise it's an ordinary (possibly binding) method call that just
+  // happens to share one of these names, and the caller's own binding
+  // checks should run instead.
+  final targetType = target.staticType;
+  final looksNumeric = targetType != null &&
+      (targetType.isDartCoreInt || targetType.isDartCoreDouble);
+  if (!looksNumeric) return null;
+
+  final errors = <UnsupportedSyntaxError>[
+    ..._checkExpression(result, target),
+  ];
+  if (call.argumentList.arguments.isNotEmpty) {
+    errors.add(
+      _error(result, call.argumentList.offset, '".$name()" takes no arguments'),
+    );
+  }
+  if (errors.isNotEmpty) return errors;
+
+  final matchesRequired = requiredType == 'int'
+      ? targetType.isDartCoreInt
+      : targetType.isDartCoreDouble;
+  if (!matchesRequired) {
+    return [
+      _error(
+        result,
+        target.offset,
+        '".$name()" requires a $requiredType receiver in v0.1 minimal '
+        'scope, got "${targetType.getDisplayString()}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
 /// Arguments to binding calls are checked like any other value expression;
 /// their Dart types already match the `external` signature, so the Go call
 /// type-checks whenever the binding's Go signature matches its Dart one.
@@ -862,6 +989,7 @@ List<UnsupportedSyntaxError> _checkPrintCall(
       final type = inner.staticType;
       if (type == null ||
           !(type.isDartCoreInt ||
+              type.isDartCoreDouble ||
               type.isDartCoreBool ||
               type.isDartCoreString)) {
         errors.add(
@@ -869,7 +997,7 @@ List<UnsupportedSyntaxError> _checkPrintCall(
             result,
             inner.offset,
             'string interpolation of "${type?.getDisplayString() ?? '?'}" is '
-            'not supported yet (only int, bool, and String)',
+            'not supported yet (only int, double, bool, and String)',
           ),
         );
         continue;

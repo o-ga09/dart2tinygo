@@ -8,25 +8,29 @@
 
 | 機能 | 状態 |
 | --- | --- |
-| 型: `int` | 実装済み（ローカル変数、リテラル、バインディングの戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入） |
-| 型: `double` / `bool` / `String` | 一部対応：ローカル変数、リテラル、バインディングの戻り値・引数、（`bool` の）比較・論理演算子。算術や `String` 操作は未実装 |
+| 型: `int` | 実装済み（ローカル変数、リテラル、バインディングの戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入、`.toDouble()`） |
+| 型: `double` | 実装済み（ローカル変数、リテラル、バインディングの戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、文字列補間） |
+| 型: `bool` / `String` | 一部対応：ローカル変数、リテラル、バインディングの戻り値・引数、（`bool` の）比較・論理演算子。`String` 操作は未実装 |
 | `var`、型推論 | 実装済み（最小構成：`var x = <リテラルかバインディング呼び出し>;`） |
 | `final` / `const` ローカル変数 | 一部対応：キーワードは無視され、`var` と同じ初期化子なら `final`/`const` も受け付けて `x := ...` を出力する |
 | トップレベル関数、`main` | 実装済み（最小構成：引数なしの `void main()` 単体のみ、他のトップレベル関数は不可） |
 | `while` | 実装済み（任意の `bool` 条件、例：`while (count < 10)`。ネスト可） |
 | `for`（C スタイル） | 実装済み（`for (var i = <初期値>; cond; updater)`。宣言する変数1つ・updater1つに限定（Go の post-clause が単一の文のため）。`for-in` は未実装） |
 | `break` / `continue` | 実装済み（ラベルなしのみ） |
-| `x += y` / `-=` / `*=` / `/=` | 実装済み（`int`/`int` か `double`/`double` のみ） |
+| `x += y` / `-=` / `*=` | 実装済み（`int`/`int` か `double`/`double` のみ） |
 | `x ~/= y` / `%=` | 実装済み（`int` のみ。`~/=` は `x /= y`、`%=` は `x = dartrt.Mod(x, y)`） |
+| `x /= y` | 実装済み（`double` のみ — Dart の `/` は常に `double` を返すので、そもそも `int /= ...` は有効な Dart ではない。`int` は `~/=` を使う） |
+| 算術 `a + b` / `-` / `*` / `/` / `~/` / `%` | 実装済み（`+`/`-`/`*` は同じ型の `int`/`int` か `double`/`double`、`~/`/`%` は `int`、`/` は `double`） |
+| `int` ⇄ `double` 変換：`.toDouble()` / `.toInt()` / `.round()` | 実装済み（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に） |
 | `if` / `else if` / `else` | 実装済み（各分岐はブロック。ループと `if` は自由にネスト可） |
 | 比較（`==`/`!=`/`<`/`<=`/`>`/`>=`）・論理（`&&`/`\|\|`/`!`）演算子 | 実装済み（`==`/`!=` は同じ型の `int`/`double`/`bool`/`String` 同士、`<`/`<=`/`>`/`>=` は同じ型の `int`/`int` か `double`/`double`、`&&`/`\|\|`/`!` は `bool`） |
 | `switch` | 未実装 |
 | `print` | 実装済み（任意の `String` 式、または文字列補間） |
-| 文字列補間 | `int` / `bool` / `String` の式は実装済み。`double` は未実装 |
+| 文字列補間 | `int` / `double` / `bool` / `String` の式が実装済み |
 | カスケード `..` | 未実装 |
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
 | 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数と `@GoType` ローカル変数へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照）。呼び出し結果へのチェーンは未実装 |
-| 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に組み込み済み、`FormatDouble` はランタイムには実装済みだが文字列補間への組み込みは #9 |
+| 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `double` の文字列補間に組み込み済み |
 | `tinygo_machine`: LED、GPIO入出力、スリープ | 未実装 |
 
 正確な変換ルールは [`docs/mapping.ja.md`](./mapping.ja.md) を、実例は
