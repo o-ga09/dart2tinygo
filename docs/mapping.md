@@ -136,6 +136,31 @@ the same class of BMP/astral caveat every other option here also has.
 | `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
 | `a.codeUnits` | `[]byte(a)` (see "List<int>" above) |
 
+## Switch statements (decided 2026-09-22, implemented)
+
+`switch` maps onto Go's own `switch`, which shares Dart 3's no-fallthrough
+semantics: neither language falls through into the next case by default, so
+the generator needs no `break` to terminate a case (a bare `break;` inside a
+`switch` case is not specially handled in v0.1 — it goes through the same
+"only inside a while/for loop" check as everywhere else, since none of the
+motivating use cases need it yet).
+
+Restricted to constant-value cases on an `int`/`String`/`bool` scrutinee —
+Go's `switch` has no pattern matching, so a Dart 3 pattern other than a bare
+constant (`case var x:`, destructuring, object patterns) is rejected by the
+checker, as is a `case ... when ...` guard and a labeled case.
+
+| Dart | Go |
+| --- | --- |
+| `switch (x) { case 0: ...; case 1: ...; default: ...; }` | `switch x { case 0: ...; case 1: ...; default: ...; }` — direct |
+| `case a: case b: <body>` (consecutive empty cases) | `case a, b: <body>` — Dart's case-grouping syntax isn't a statement, so adjacent empty cases are merged into one Go `case` clause with a comma-separated value list |
+| `case a: /* nothing, falls into default */ default: <body>` | `default: <body>` (the `a` case is dropped, not merged) — Go's `default` has no value list, but it already matches any value no explicit `case` claims, which is exactly what an empty case falling into `default` means |
+| `case 'x':` / `case true:` | `case "x":` / `case true:` — the case value must be a literal of the scrutinee's own type, no implicit conversion |
+
+Out of scope for v0.1: `case ... when ...` guards, non-constant/destructuring
+patterns, `for-in`/`for-loop`-in-`switch` label targets, and enum-value
+cases (blocked on `enum` support, see the type mapping table).
+
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
@@ -152,7 +177,8 @@ the same class of BMP/astral caveat every other option here also has.
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker | decided |
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
 | `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
-| `for-in` / `switch` | `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
+| `for-in` | → `range` | decided (v0.2) |
+| `switch` | `switch`; constant `int`/`String`/`bool` cases only, no fallthrough, empty cases merge/drop — see "Switch statements" above | impl. |
 | cascade `a..b()..c()` | temporary + statement sequence | decided |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |
 | inheritance, mixins, generics, `T?`, `throw`/exceptions, `async` | rejected by the checker | decided (future) |

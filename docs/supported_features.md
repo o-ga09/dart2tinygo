@@ -26,7 +26,7 @@ Any PR that adds a language feature must update this table.
 | `int` ⇄ `double` conversion: `.toDouble()` / `.toInt()` / `.round()` | Implemented (`.toDouble()` on `int`; `.toInt()`/`.round()` on `double`) |
 | `if` / `else if` / `else` | Implemented (block-bodied branches; loops and `if` may nest freely) |
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
-| `switch` | Not implemented |
+| `switch` | Implemented (`int`/`String`/`bool` expressions only; constant-value cases, `default`; consecutive empty cases group into Go's `case a, b:`; guards (`case ... when ...`) and destructuring patterns not implemented) |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
 | String interpolation | Implemented for `int` / `double` / `bool` / `String` expressions |
 | Cascade `..` | Not implemented |

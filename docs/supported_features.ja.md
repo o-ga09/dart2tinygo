@@ -26,7 +26,7 @@
 | `int` ⇄ `double` 変換：`.toDouble()` / `.toInt()` / `.round()` | 実装済み（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に） |
 | `if` / `else if` / `else` | 実装済み（各分岐はブロック。ループと `if` は自由にネスト可） |
 | 比較（`==`/`!=`/`<`/`<=`/`>`/`>=`）・論理（`&&`/`\|\|`/`!`）演算子 | 実装済み（`==`/`!=` は同じ型の `int`/`double`/`bool`/`String` 同士、`<`/`<=`/`>`/`>=` は同じ型の `int`/`int` か `double`/`double`、`&&`/`\|\|`/`!` は `bool`） |
-| `switch` | 未実装 |
+| `switch` | 実装済み（`int`/`String`/`bool` 式のみ。定数値の `case`、`default` に対応。連続する空の `case` は Go の `case a, b:` にまとめられる。`case ... when ...` ガードやデストラクチャリングパターンは未実装） |
 | `print` | 実装済み（任意の `String` 式、または文字列補間） |
 | 文字列補間 | `int` / `double` / `bool` / `String` の式が実装済み |
 | カスケード `..` | 未実装 |

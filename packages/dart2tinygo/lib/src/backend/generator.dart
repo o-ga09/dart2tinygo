@@ -136,6 +136,9 @@ void _writeStatement(
     case IfStatement():
       _writeIfStatement(statement, out, deps, indent: indent);
 
+    case SwitchStatement():
+      _writeSwitchStatement(statement, out, deps, indent: indent);
+
     default:
       throw StateError(
         'generator received unchecked statement: ${statement.runtimeType}. '
@@ -207,6 +210,55 @@ void _writeForStatement(
   for (final inner in (statement.body as Block).statements) {
     _writeStatement(inner, out, deps, indent: '$indent\t');
   }
+  out.writeln('$indent}');
+}
+
+/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }` maps
+/// onto Go's own `switch`, which shares Dart's no-fallthrough semantics
+/// (`docs/mapping.md`). Consecutive empty Dart cases (`case 1: case 2: ...`)
+/// are grouping syntax, not statements — they're merged into a single Go
+/// `case 1, 2:` clause. An empty case immediately before `default` is
+/// dropped rather than merged: Go's `default` has no value list to merge
+/// into, but it already matches any value no other `case` claims, which is
+/// exactly what an empty case falling into `default` means.
+void _writeSwitchStatement(
+  SwitchStatement statement,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  out.writeln(
+      '${indent}switch ${_writeExpression(statement.expression, deps)} {');
+
+  final pendingValues = <String>[];
+  for (final member in statement.members) {
+    switch (member) {
+      case SwitchPatternCase():
+        final pattern = member.guardedPattern.pattern as ConstantPattern;
+        pendingValues.add(_writeExpression(pattern.expression, deps));
+        if (member.statements.isEmpty) continue;
+        out.writeln('${indent}case ${pendingValues.join(', ')}:');
+        pendingValues.clear();
+        for (final inner in member.statements) {
+          _writeStatement(inner, out, deps, indent: '$indent\t');
+        }
+      case SwitchDefault():
+        pendingValues.clear();
+        out.writeln('${indent}default:');
+        for (final inner in member.statements) {
+          _writeStatement(inner, out, deps, indent: '$indent\t');
+        }
+      case SwitchCase():
+        throw StateError(
+          'generator received unchecked SwitchCase member. This is a bug: '
+          'checkEntryPoint() should have rejected it first.',
+        );
+    }
+  }
+  if (pendingValues.isNotEmpty) {
+    out.writeln('${indent}case ${pendingValues.join(', ')}:');
+  }
+
   out.writeln('$indent}');
 }
 
