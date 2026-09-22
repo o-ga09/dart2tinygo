@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	tinygo.org/x/drivers v0.33.0
+	tinygo.org/x/tinydraw v0.4.0
 	tinygo.org/x/tinyfont v0.6.0
 )
 

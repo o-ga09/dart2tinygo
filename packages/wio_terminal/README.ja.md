@@ -15,6 +15,13 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `newDisplay()` | `wio.NewDisplay()` | SPI3 と ILI9341 LCD を初期化（横向き、バックライト ON、黒でクリア） |
 | `Display.clear()` | `(*Display).Clear()` | 画面を黒で塗りつぶす |
 | `Display.drawText(x, y, text)` | `(*Display).DrawText(x, y, text)` | 白い文字（FreeMono Bold 12pt）をベースライン (x, y) に描画 |
+| `Display.width()` / `.height()` | `(*Display).Width()` / `.Height()` | 現在の回転角での画面サイズ（ピクセル） |
+| `Display.fillScreen(color)` | `(*Display).FillScreen(color)` | 画面全体を[`Color`](./lib/wio_terminal.dart)で塗りつぶす |
+| `Display.setBacklight(on)` | `(*Display).SetBacklight(on)` | バックライトのON/OFF |
+| `Display.setRotation(degrees)` | `(*Display).SetRotation(degrees)` | 画面を時計回りに回転（0/90/180/270） |
+| `Display.drawPixel/drawLine/drawRect/fillRect/drawCircle/fillCircle(..., color)` | `(*Display).DrawPixel/DrawLine/DrawRect/FillRect/DrawCircle/FillCircle(...)` | 図形描画（`tinygo.org/x/tinydraw` 経由） |
+| `Display.drawTextColor(x, y, text, color)` / `.drawTextSize(x, y, text, color, size)` / `.textWidth(text, size)` | `(*Display).DrawTextColor(...)` / `.DrawTextSize(...)` / `.TextWidth(...)` | 色付き文字、他のフォントサイズ（9/12/18/24）、描画幅の計測 |
+| `rgb(r, g, b)` | `wio.RGB(r, g, b)` | 8bit成分から[`Color`](./lib/wio_terminal.dart)を作る |
 | `newLed()` | `wio.NewLed()` | ユーザーLED（青、`machine.LED`）を出力として設定 |
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | ユーザーLEDを制御 |
 | `newButtons()` | `wio.NewButtons()` | ボタンA/B/Cと5方向スイッチをプルアップ入力として設定 |

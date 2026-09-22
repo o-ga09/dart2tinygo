@@ -15,6 +15,13 @@ Currently provided:
 | `newDisplay()` | `wio.NewDisplay()` | Configure SPI3 + the ILI9341 LCD (landscape, backlight on, cleared to black) |
 | `Display.clear()` | `(*Display).Clear()` | Fill the screen with black |
 | `Display.drawText(x, y, text)` | `(*Display).DrawText(x, y, text)` | Draw white text (FreeMono Bold 12pt) with its baseline at (x, y) |
+| `Display.width()` / `.height()` | `(*Display).Width()` / `.Height()` | Screen size in pixels at the current rotation |
+| `Display.fillScreen(color)` | `(*Display).FillScreen(color)` | Fill the whole screen with a [`Color`](./lib/wio_terminal.dart) |
+| `Display.setBacklight(on)` | `(*Display).SetBacklight(on)` | Turn the LCD backlight on/off |
+| `Display.setRotation(degrees)` | `(*Display).SetRotation(degrees)` | Rotate the screen clockwise (0/90/180/270) |
+| `Display.drawPixel/drawLine/drawRect/fillRect/drawCircle/fillCircle(..., color)` | `(*Display).DrawPixel/DrawLine/DrawRect/FillRect/DrawCircle/FillCircle(...)` | Shape drawing (via `tinygo.org/x/tinydraw`) |
+| `Display.drawTextColor(x, y, text, color)` / `.drawTextSize(x, y, text, color, size)` / `.textWidth(text, size)` | `(*Display).DrawTextColor(...)` / `.DrawTextSize(...)` / `.TextWidth(...)` | Colored text, other point sizes (9/12/18/24), and measuring rendered width |
+| `rgb(r, g, b)` | `wio.RGB(r, g, b)` | Build a [`Color`](./lib/wio_terminal.dart) from 8-bit components |
 | `newLed()` | `wio.NewLed()` | Configure the user LED (blue, `machine.LED`) as an output |
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | Drive the user LED |
 | `newButtons()` | `wio.NewButtons()` | Configure buttons A/B/C and the 5-way switch as pull-up inputs |

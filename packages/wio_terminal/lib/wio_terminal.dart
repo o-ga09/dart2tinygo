@@ -27,7 +27,84 @@ class Display {
   /// the top-left corner of the landscape screen.
   @GoName('DrawText')
   external void drawText(int x, int y, String text);
+
+  /// The screen width in pixels at the current rotation.
+  @GoName('Width')
+  external int width();
+
+  /// The screen height in pixels at the current rotation.
+  @GoName('Height')
+  external int height();
+
+  /// Fills the whole screen with [color].
+  @GoName('FillScreen')
+  external void fillScreen(Color color);
+
+  /// Turns the LCD backlight on or off.
+  @GoName('SetBacklight')
+  external void setBacklight(bool on);
+
+  /// Rotates the screen clockwise by [degrees] (0/90/180/270; any other
+  /// value is treated as 0). Width/height swap between the 0/180 and
+  /// 90/270 cases.
+  @GoName('SetRotation')
+  external void setRotation(int degrees);
+
+  /// Sets a single pixel to [color].
+  @GoName('DrawPixel')
+  external void drawPixel(int x, int y, Color color);
+
+  /// Draws a straight line from ([x0], [y0]) to ([x1], [y1]) in [color].
+  @GoName('DrawLine')
+  external void drawLine(int x0, int y0, int x1, int y1, Color color);
+
+  /// Draws the outline of a [w] x [h] rectangle with its top-left corner at
+  /// ([x], [y]), in [color]. Coordinates outside the screen are silently
+  /// ignored.
+  @GoName('DrawRect')
+  external void drawRect(int x, int y, int w, int h, Color color);
+
+  /// Fills a [w] x [h] rectangle with its top-left corner at ([x], [y]), in
+  /// [color].
+  @GoName('FillRect')
+  external void fillRect(int x, int y, int w, int h, Color color);
+
+  /// Draws the outline of a circle centered at ([x], [y]) with radius [r],
+  /// in [color].
+  @GoName('DrawCircle')
+  external void drawCircle(int x, int y, int r, Color color);
+
+  /// Draws a filled circle centered at ([x], [y]) with radius [r], in
+  /// [color].
+  @GoName('FillCircle')
+  external void fillCircle(int x, int y, int r, Color color);
+
+  /// Draws [text] in [color] (FreeMono Bold 12pt) with its baseline at
+  /// ([x], [y]).
+  @GoName('DrawTextColor')
+  external void drawTextColor(int x, int y, String text, Color color);
+
+  /// Draws [text] in [color] with its baseline at ([x], [y]), at the given
+  /// point [size] (9/12/18/24; any other value falls back to 12).
+  @GoName('DrawTextSize')
+  external void drawTextSize(int x, int y, String text, Color color, int size);
+
+  /// The rendered width of [text] in pixels, at the given point [size]
+  /// (9/12/18/24; any other value falls back to 12).
+  @GoName('TextWidth')
+  external int textWidth(String text, int size);
 }
+
+/// An opaque 24-bit RGB color for the LCD. Created with [rgb].
+@GoType('wio.Color')
+class Color {
+  Color._();
+}
+
+/// Creates a [Color] from 8-bit red/green/blue components (values outside
+/// 0-255 are truncated).
+@GoName('wio.RGB')
+external Color rgb(int r, int g, int b);
 
 /// Configures the Wio Terminal's own user LED (blue) as an output and
 /// returns a handle to control it.
