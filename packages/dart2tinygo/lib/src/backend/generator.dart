@@ -158,10 +158,11 @@ void _writeExpressionStatement(
   );
 }
 
+/// `print(x)` takes any `String` expression; interpolation is concatenated
+/// per type (`docs/mapping.md`, "String interpolation"): `int` via
+/// `strconv.Itoa`, `bool` via `strconv.FormatBool`, `String` verbatim. No
+/// `fmt` in the generated code.
 String _writePrintArgument(Expression argument, GoDeps deps) {
-  if (argument is SimpleStringLiteral) {
-    return _goStringLiteral(argument.value);
-  }
   if (argument is StringInterpolation) {
     final parts = <String>[];
     for (final element in argument.elements) {
@@ -170,9 +171,21 @@ String _writePrintArgument(Expression argument, GoDeps deps) {
           parts.add(_goStringLiteral(element.value));
         }
       } else if (element is InterpolationExpression) {
-        deps.imports['strconv'] = null;
-        final name = (element.expression as SimpleIdentifier).name;
-        parts.add('strconv.Itoa($name)');
+        final inner = element.expression;
+        final value = _writeExpression(inner, deps);
+        final type = inner.staticType!;
+        if (type.isDartCoreString) {
+          parts.add(value);
+        } else if (type.isDartCoreInt) {
+          deps.imports['strconv'] = null;
+          parts.add('strconv.Itoa($value)');
+        } else if (type.isDartCoreBool) {
+          deps.imports['strconv'] = null;
+          parts.add('strconv.FormatBool($value)');
+        } else {
+          throw StateError(
+              'unchecked interpolation of ${type.getDisplayString()}');
+        }
       }
     }
     if (parts.isEmpty) {
@@ -180,7 +193,7 @@ String _writePrintArgument(Expression argument, GoDeps deps) {
     }
     return parts.join(' + ');
   }
-  throw StateError('unchecked print() argument: ${argument.runtimeType}');
+  return _writeExpression(argument, deps);
 }
 
 /// Named args on `Duration(...)` (days/hours/minutes/seconds/milliseconds/
@@ -205,14 +218,28 @@ String _writeDurationExpression(InstanceCreationExpression creation) {
   return terms.join(' + ');
 }
 
+/// Value expressions the checker accepts, each emitted as one Go expression.
+/// Literals stay untyped Go constants, so `x := 0` / `x := 0.5` / `x := true`
+/// infer `int` / `float64` / `bool` exactly as `docs/mapping.md` decides.
 String _writeExpression(Expression expression, GoDeps deps) {
   if (expression is IntegerLiteral) {
-    return '${expression.value}';
+    // Dart lets an int literal stand for a double (`double d = 2;`); Go
+    // would infer `int` from a bare `2`, so keep the float-ness explicit.
+    final isDouble = expression.staticType?.isDartCoreDouble ?? false;
+    return isDouble ? '${expression.value}.0' : '${expression.value}';
+  }
+  if (expression is DoubleLiteral) {
+    return expression.literal.lexeme;
+  }
+  if (expression is BooleanLiteral) {
+    return expression.value ? 'true' : 'false';
   }
   if (expression is SimpleStringLiteral) {
     return _goStringLiteral(expression.value);
   }
-  if (expression is SimpleIdentifier) {
+  if (expression is Identifier) {
+    final constant = _writeConstantReference(expression, deps);
+    if (constant != null) return constant;
     return expression.name;
   }
   if (expression is MethodInvocation) {
@@ -220,6 +247,19 @@ String _writeExpression(Expression expression, GoDeps deps) {
     if (bound != null) return bound;
   }
   throw StateError('unchecked expression: ${expression.runtimeType}');
+}
+
+/// A `@GoName` on an `external` top-level or static getter names a Go
+/// constant or package-level variable, emitted as the bare (package-
+/// qualified) identifier: `red` / `Button.a` → `rt.Red` / `rt.ButtonA`.
+/// Recorded in `docs/mapping.md`.
+String? _writeConstantReference(Identifier reference, GoDeps deps) {
+  final element = reference.element;
+  if (element is! GetterElement || !element.isStatic) return null;
+  final binding = goBindingOf(element);
+  if (binding == null) return null;
+  _useImport(binding.import, deps);
+  return binding.goName;
 }
 
 /// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes
@@ -234,12 +274,7 @@ String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
   final binding = goBindingOf(callee);
   if (binding == null) return null;
 
-  final import = binding.import;
-  deps.imports[import.path] = import.alias;
-  final local = import.localModule;
-  if (local != null) {
-    deps.localModules[local.modulePath] = local;
-  }
+  _useImport(binding.import, deps);
 
   final args = call.argumentList.arguments
       .map((arg) => _writeExpression(arg, deps))
@@ -249,6 +284,14 @@ String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
     return '${binding.goName}($args)';
   }
   return '${(target as SimpleIdentifier).name}.${binding.goName}($args)';
+}
+
+void _useImport(GoImportSpec import, GoDeps deps) {
+  deps.imports[import.path] = import.alias;
+  final local = import.localModule;
+  if (local != null) {
+    deps.localModules[local.modulePath] = local;
+  }
 }
 
 String _goStringLiteral(String content) {

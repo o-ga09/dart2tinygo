@@ -1,6 +1,7 @@
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart';
 import 'package:dart2tinygo/src/frontend/bindings.dart';
 
 /// A single instance of Dart syntax that is outside the currently supported
@@ -23,11 +24,11 @@ class UnsupportedSyntaxError {
   String toString() => '$filePath:$line:$column: $reason';
 }
 
-/// v0.1 minimal scope only: a single `void main()` containing `int` locals,
-/// `while (true)`, `print(...)`, `sleep(Duration(...))`, and calls into
-/// annotation bindings (`@GoImport` / `@GoName` / `@GoType`, see
-/// `docs/writing_bindings.md`). Everything else is reported here, up front,
-/// rather than discovered mid-conversion.
+/// v0.1 minimal scope only: a single `void main()` containing
+/// `int`/`double`/`bool`/`String` locals, `while (true)`, `print(...)`,
+/// `sleep(Duration(...))`, and calls into annotation bindings (`@GoImport` /
+/// `@GoName` / `@GoType`, see `docs/writing_bindings.md`). Everything else
+/// is reported here, up front, rather than discovered mid-conversion.
 List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   final errors = <UnsupportedSyntaxError>[];
   final unit = result.unit;
@@ -94,7 +95,8 @@ List<UnsupportedSyntaxError> _checkStatement(
   switch (statement) {
     case VariableDeclarationStatement():
       for (final variable in statement.variables.variables) {
-        if (variable.initializer == null) {
+        final initializer = variable.initializer;
+        if (initializer == null) {
           errors.add(
             _error(
               result,
@@ -104,47 +106,20 @@ List<UnsupportedSyntaxError> _checkStatement(
           );
           continue;
         }
-        final initializer = variable.initializer!;
-        final type = initializer.staticType;
-        if (initializer is MethodInvocation &&
-            initializer.target == null &&
-            _bindingOf(initializer) != null) {
-          // `final display = newDisplay();` — a binding call whose result is
-          // a `@GoType` value, kept in a local for later method calls.
-          errors.addAll(_checkBoundCall(result, initializer));
-          if (!isGoType(type)) {
-            errors.add(
-              _error(
-                result,
-                initializer.offset,
-                'binding call "${initializer.methodName.name}" returns '
-                '"${type?.getDisplayString() ?? '?'}", but only @GoType '
-                'classes can be stored in a local',
-              ),
-            );
-          }
-          continue;
-        }
-        if (type == null || !type.isDartCoreInt) {
+        final type = variable.declaredFragment?.element.type;
+        if (!_isSupportedType(type)) {
           errors.add(
             _error(
               result,
               variable.offset,
               'local variable "${variable.name.lexeme}" has type '
-              '"${type?.getDisplayString() ?? '?'}", but v0.1 minimal scope '
-              'only supports int locals and @GoType binding values',
+              '"${type?.getDisplayString() ?? '?'}", but only '
+              '$_supportedTypesLabel locals are supported',
             ),
           );
-        } else if (initializer is! IntegerLiteral) {
-          errors.add(
-            _error(
-              result,
-              variable.initializer!.offset,
-              'local variable "${variable.name.lexeme}" must be initialized '
-              'with an integer literal in v0.1 minimal scope',
-            ),
-          );
+          continue;
         }
+        errors.addAll(_checkExpression(result, initializer));
       }
 
     case ExpressionStatement():
@@ -218,12 +193,10 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
           return _checkSleepCall(result, expression);
       }
     }
-    if (_bindingOf(expression) != null) {
-      return _checkBoundCall(result, expression);
-    }
-    final bindingProblem = _describeBindingProblem(expression);
-    if (bindingProblem != null) {
-      return [_error(result, expression.offset, bindingProblem)];
+    if (_bindingOf(expression) != null ||
+        _describeBindingProblem(expression) != null) {
+      // A binding call as a statement; a non-void result is discarded.
+      return _checkExpression(result, expression);
     }
   }
 
@@ -260,13 +233,26 @@ GoBinding? _bindingOf(MethodInvocation call) {
   return goBindingOf(callee);
 }
 
-/// Explains why [call] looks like a binding call but isn't one, so binding
-/// authors get a pointer at the missing annotation rather than a generic
-/// "unsupported expression".
-String? _describeBindingProblem(MethodInvocation call) {
-  final callee = call.methodName.element;
+/// Explains why [reference] (a call or a constant reference) looks like a
+/// binding but isn't one, so binding authors get a pointer at the missing
+/// annotation rather than a generic "unsupported expression".
+String? _describeBindingProblem(Expression reference) {
+  final Element? callee;
+  final String name;
+  final Expression? target;
+  switch (reference) {
+    case MethodInvocation():
+      callee = reference.methodName.element;
+      name = reference.methodName.name;
+      target = reference.target;
+    case Identifier():
+      callee = reference.element;
+      name = reference.name;
+      target = null;
+    default:
+      return null;
+  }
   if (callee is! ExecutableElement || !callee.isExternal) return null;
-  final name = call.methodName.name;
   if (goNameOf(callee) == null) {
     return 'external "$name" has no @GoName annotation '
         '(see docs/writing_bindings.md)';
@@ -275,7 +261,10 @@ String? _describeBindingProblem(MethodInvocation call) {
     return 'external "$name" is declared in a library without a @GoImport '
         'annotation (see docs/writing_bindings.md)';
   }
-  final target = call.target;
+  if (callee is GetterElement && !callee.isStatic) {
+    return 'external getter "$name" must be top-level or static to refer to '
+        'a Go constant (see docs/writing_bindings.md)';
+  }
   if (target != null) {
     if (!isGoType(target.staticType)) {
       return 'method "$name" is called on '
@@ -288,30 +277,81 @@ String? _describeBindingProblem(MethodInvocation call) {
   return null;
 }
 
-/// Arguments to binding calls are limited to what can be passed to Go
-/// verbatim: `int` literals, `String` literals, and `int` locals.
+/// The Dart types a local, an argument, or a binding result may have. Each
+/// maps onto exactly one Go type (`docs/mapping.md`, "Type mapping table"),
+/// so values of these types are passed to Go verbatim.
+bool _isSupportedType(DartType? type) =>
+    type != null &&
+    (type.isDartCoreInt ||
+        type.isDartCoreDouble ||
+        type.isDartCoreBool ||
+        type.isDartCoreString ||
+        isGoType(type));
+
+const _supportedTypesLabel = 'int, double, bool, String, and @GoType binding';
+
+/// Checks [expression] in value position (a local's initializer, a binding
+/// argument, an interpolated value): it must be something the generator can
+/// emit as a single Go expression without helper code — a literal, a local,
+/// a binding call, or a reference to a Go constant.
+List<UnsupportedSyntaxError> _checkExpression(
+  ResolvedUnitResult result,
+  Expression expression,
+) {
+  if (expression is IntegerLiteral ||
+      expression is DoubleLiteral ||
+      expression is BooleanLiteral ||
+      expression is SimpleStringLiteral) {
+    return const [];
+  }
+  if (expression is Identifier) {
+    if (expression.element is LocalVariableElement) return const [];
+    if (_constantBindingOf(expression) != null) return const [];
+    final bindingProblem = _describeBindingProblem(expression);
+    if (bindingProblem != null) {
+      return [_error(result, expression.offset, bindingProblem)];
+    }
+  }
+  if (expression is MethodInvocation) {
+    if (_bindingOf(expression) != null) {
+      return _checkBoundCall(result, expression);
+    }
+    final bindingProblem = _describeBindingProblem(expression);
+    if (bindingProblem != null) {
+      return [_error(result, expression.offset, bindingProblem)];
+    }
+  }
+  return [
+    _error(
+      result,
+      expression.offset,
+      'expression "${_expressionLabel(expression)}" is not supported in v0.1 '
+      'minimal scope (only int/double/bool/String literals, local variables, '
+      'binding calls, and Go constant references)',
+    ),
+  ];
+}
+
+/// The `@GoName` binding behind a reference to a Go constant or package
+/// variable: an `external` top-level getter (`red`) or an `external static`
+/// getter on a `@GoType` class (`Button.a`). Instance getters are not
+/// bindings; a Go method that returns a value is declared as a method.
+GoBinding? _constantBindingOf(Identifier reference) {
+  final element = reference.element;
+  if (element is! GetterElement || !element.isStatic) return null;
+  return goBindingOf(element);
+}
+
+/// Arguments to binding calls are checked like any other value expression;
+/// their Dart types already match the `external` signature, so the Go call
+/// type-checks whenever the binding's Go signature matches its Dart one.
 List<UnsupportedSyntaxError> _checkBoundCall(
   ResolvedUnitResult result,
   MethodInvocation call,
 ) {
   final errors = <UnsupportedSyntaxError>[];
   for (final arg in call.argumentList.arguments) {
-    if (arg is IntegerLiteral || arg is SimpleStringLiteral) continue;
-    final type = arg.staticType;
-    if (arg is SimpleIdentifier &&
-        arg.element is LocalVariableElement &&
-        type != null &&
-        type.isDartCoreInt) {
-      continue;
-    }
-    errors.add(
-      _error(
-        result,
-        arg.offset,
-        'binding call "${call.methodName.name}" argument must be an int '
-        'literal, a string literal, or an int local variable',
-      ),
-    );
+    errors.addAll(_checkExpression(result, arg));
   }
   return errors;
 }
@@ -328,36 +368,43 @@ List<UnsupportedSyntaxError> _checkPrintCall(
     ];
   }
   final arg = args.single;
-  if (arg is SimpleStringLiteral) {
-    return const [];
-  }
   if (arg is StringInterpolation) {
     final errors = <UnsupportedSyntaxError>[];
     for (final element in arg.elements) {
-      if (element is InterpolationExpression) {
-        final inner = element.expression;
-        final type = inner.staticType;
-        if (inner is! SimpleIdentifier || type == null || !type.isDartCoreInt) {
-          errors.add(
-            _error(
-              result,
-              inner.offset,
-              'string interpolation only supports int-typed local variables '
-              'in v0.1 minimal scope',
-            ),
-          );
-        }
+      if (element is! InterpolationExpression) continue;
+      final inner = element.expression;
+      final type = inner.staticType;
+      if (type == null ||
+          !(type.isDartCoreInt ||
+              type.isDartCoreBool ||
+              type.isDartCoreString)) {
+        errors.add(
+          _error(
+            result,
+            inner.offset,
+            'string interpolation of "${type?.getDisplayString() ?? '?'}" is '
+            'not supported yet (only int, bool, and String)',
+          ),
+        );
+        continue;
       }
+      errors.addAll(_checkExpression(result, inner));
     }
     return errors;
   }
-  return [
-    _error(
-      result,
-      arg.offset,
-      'print() argument must be a string literal or string interpolation',
-    ),
-  ];
+  final type = arg.staticType;
+  if (type == null || !type.isDartCoreString) {
+    return [
+      _error(
+        result,
+        arg.offset,
+        'print() argument must be a String (got '
+        '"${type?.getDisplayString() ?? '?'}"); other types are not '
+        'converted yet',
+      ),
+    ];
+  }
+  return _checkExpression(result, arg);
 }
 
 List<UnsupportedSyntaxError> _checkSleepCall(

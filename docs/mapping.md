@@ -34,7 +34,9 @@ map 1:1 onto Go calls; the transpiler adds no wrapper code of its own.
 | `final d = newDisplay();` where `newDisplay` is `@GoName('wio.NewDisplay')` | `d := wio.NewDisplay()` (`final`/`var` make no difference; Go infers the `@GoType`) |
 | `beep(3);` where `beep` is `@GoName('rt.Beep')` | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');` where `drawText` is `@GoName('DrawText')` | `d.DrawText(10, 20, "hi")` |
-| Arguments: `int` literal / `String` literal / `int` local | Emitted verbatim: untyped constant / Go string literal / identifier |
+| `final n = sensor.read();` / `var ok = isReady();` (`int` / `double` / `bool` / `String` / `@GoType` results) | `n := sensor.Read()` / `ok := rt.IsReady()` (Go infers the type; a non-void result used as a statement is discarded) |
+| `red` / `Button.a` where the getter is `@GoName('rt.Red')` / `@GoName('rt.ButtonA')` | `rt.Red` / `rt.ButtonA` — a bare identifier, no call |
+| Arguments: `int` / `double` / `bool` / `String` literal, local, binding call, Go constant reference | Emitted verbatim: untyped constant / identifier / call / identifier. No casts: a Go parameter must be `int` / `float64` / `bool` / `string` or the `@GoType` itself |
 
 Generated `go.mod`: for each binding whose Dart package ships `go/go.mod`,
 `require <module> v0.0.0` plus `replace <module> => <absolute local path>`,
@@ -59,10 +61,10 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 
 | Dart | Go | Status |
 | --- | --- | --- |
-| `int` | `int` | impl. (literals/locals) |
-| `double` | `float64` | decided |
-| `bool` | `bool` | decided |
-| `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | decided |
+| `int` | `int` | impl. (literals/locals/binding results) |
+| `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; no arithmetic or interpolation yet) |
+| `bool` | `bool` | impl. (literals/locals/binding results; no operators or `if` yet) |
+| `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | impl. (literals/locals/binding results; no operations yet) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
 | `List<T>` | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
 | `enum` | `type E int` + `const ( ... iota )`; `.index` is the value, `.name` via a string table | decided (v0.2) |
@@ -85,11 +87,11 @@ used. Initial contents: `FormatDouble` (Dart prints `1.0`, Go's
 semantics, not board knowledge, so it does not violate the core's
 no-board-code rule.
 
-## String interpolation (implemented for `int`, decided for the rest)
+## String interpolation (implemented for `int` / `bool` / `String`, decided for `double`)
 
 - Do not use `fmt.Sprintf`. Concatenate with `strconv` etc. based on type, to avoid bloating the TinyGo binary.
-- Implemented: `int`-typed interpolation expressions via `strconv.Itoa`.
-- Decided: `bool` → `strconv.FormatBool`, `double` → `dartrt.FormatDouble`, `String` → verbatim; arbitrary expressions of those types, not only locals.
+- Implemented: `int` → `strconv.Itoa`, `bool` → `strconv.FormatBool`, `String` → verbatim. The interpolated expression may be any supported value expression (literal, local, binding call, Go constant), not only a local. `print(s)` likewise takes any `String` expression.
+- Decided: `double` → `dartrt.FormatDouble` (waits for the `dartrt` runtime).
 
 ## Generated `go.mod`
 

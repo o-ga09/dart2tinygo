@@ -79,15 +79,56 @@ void main() {
     expect(errors.single.filePath, endsWith('entry.dart'));
   });
 
-  test('reports non-int locals', () async {
+  test('accepts int/double/bool/String literal locals', () async {
     final errors = await checkSource('''
 void main() {
-  var name = 'hi';
+  var count = 0;
+  var ratio = 0.5;
+  double whole = 2;
+  final ready = true;
+  const name = 'hi';
+  print('\$count \$ready \$name');
   print(name);
 }
 ''');
-    expect(errors, isNotEmpty);
-    expect(errors.first.reason, contains('int locals'));
+    expect(errors, isEmpty);
+  });
+
+  test('reports locals of unsupported types', () async {
+    final errors = await checkSource('''
+void main() {
+  var d = const Duration(seconds: 1);
+  var xs = [1, 2];
+}
+''');
+    expect(errors, hasLength(2));
+    expect(errors[0].line, 2);
+    expect(errors[0].reason, contains('"Duration"'));
+    expect(errors[0].reason, contains('int, double, bool, String'));
+    expect(errors[1].line, 3);
+  });
+
+  test('reports unsupported local initializers', () async {
+    final errors = await checkSource('''
+void main() {
+  var sum = 1 + 2;
+}
+''');
+    expect(errors, hasLength(1));
+    expect(errors.single.line, 2);
+    expect(errors.single.reason, contains('BinaryExpression'));
+  });
+
+  test('reports double interpolation as not supported yet', () async {
+    final errors = await checkSource('''
+void main() {
+  var ratio = 0.5;
+  print('r=\$ratio');
+}
+''');
+    expect(errors, hasLength(1));
+    expect(errors.single.line, 3);
+    expect(errors.single.reason, contains('double'));
   });
 
   group('annotation bindings', () {
@@ -104,6 +145,61 @@ void main() {
 }
 ''');
       expect(errors, isEmpty);
+    });
+
+    test('accepts non-void results, typed arguments, and Go constants',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  final level = readLevel();
+  final ready = isReady();
+  final volts = voltage();
+  final name = label();
+  final color = rgb(1, 2, 3);
+  final button = Button.a;
+  widget.fill(color);
+  widget.fill(red);
+  widget.fill(rgb(4, 5, 6));
+  widget.configure(ready, volts, name);
+  widget.configure(false, 1.5, 'x');
+  final pressed = widget.press(Button.b);
+  print('\$level \$ready \$name \$pressed \${widget.level()}');
+  print(label());
+  beep(readLevel());
+  beep(widget.level());
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports constant getters without @GoName', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  widget.fill(unnamedColor);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.line, 5);
+      expect(errors.single.reason, contains('no @GoName annotation'));
+    });
+
+    test('reports binding results of unsupported types in interpolation',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  print('v=\${voltage()}');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('double'));
     });
 
     test('reports external functions without @GoName', () async {
@@ -131,7 +227,7 @@ void main() {
 ''');
       expect(errors, hasLength(2));
       expect(errors[0].line, 5);
-      expect(errors[0].reason, contains('argument must be an int literal'));
+      expect(errors[0].reason, contains('BinaryExpression'));
       expect(errors[1].line, 6);
     });
 
