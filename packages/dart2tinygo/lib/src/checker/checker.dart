@@ -272,6 +272,10 @@ List<UnsupportedSyntaxError> _checkStatement(
       errors
           .addAll(_checkIfStatement(result, statement, insideLoop: insideLoop));
 
+    case SwitchStatement():
+      errors.addAll(
+          _checkSwitchStatement(result, statement, insideLoop: insideLoop));
+
     case ReturnStatement():
       // Whether a bare `return;` is required (void) or a value is required
       // (non-void) is left to Dart's own analyzer, matching the project's
@@ -625,6 +629,130 @@ List<UnsupportedSyntaxError> _checkIfStatement(
   }
 
   return errors;
+}
+
+/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }`: v0.1
+/// minimal scope only covers a `switch` expression of type `int`/`String`/
+/// `bool` matched against constant-value cases (Go's `switch` has no pattern
+/// matching, guards, or destructuring — `docs/mapping.md`). Dart cases don't
+/// fall through, so neither does the generated Go, which is why no
+/// `insideSwitch` tracking is needed here: unlike C, a bare `break;` isn't
+/// required to end a case, so v0.1 doesn't special-case it inside `switch`
+/// (it's still only accepted where `insideLoop` already allows it).
+List<UnsupportedSyntaxError> _checkSwitchStatement(
+  ResolvedUnitResult result,
+  SwitchStatement statement, {
+  required bool insideLoop,
+}) {
+  final errors = <UnsupportedSyntaxError>[];
+
+  final scrutineeType = statement.expression.staticType;
+  final scrutineeSupported = scrutineeType != null &&
+      (scrutineeType.isDartCoreInt ||
+          scrutineeType.isDartCoreString ||
+          scrutineeType.isDartCoreBool);
+  if (!scrutineeSupported) {
+    errors.add(
+      _error(
+        result,
+        statement.expression.offset,
+        'switch expression has type '
+        '"${scrutineeType?.getDisplayString() ?? '?'}", but only '
+        'int/String/bool are supported in v0.1 minimal scope',
+      ),
+    );
+  } else {
+    errors.addAll(_checkExpression(result, statement.expression));
+  }
+
+  for (final member in statement.members) {
+    if (member.labels.isNotEmpty) {
+      errors.add(
+        _error(
+          result,
+          member.offset,
+          'labeled switch cases are not supported in v0.1 minimal scope',
+        ),
+      );
+    }
+
+    switch (member) {
+      case SwitchPatternCase():
+        final guardedPattern = member.guardedPattern;
+        if (guardedPattern.whenClause != null) {
+          errors.add(
+            _error(
+              result,
+              guardedPattern.whenClause!.offset,
+              '"case ... when ..." guards are not supported in v0.1 '
+              'minimal scope',
+            ),
+          );
+        } else {
+          final pattern = guardedPattern.pattern;
+          if (pattern is! ConstantPattern) {
+            errors.add(
+              _error(
+                result,
+                pattern.offset,
+                'case pattern "${_stripImpl(pattern)}" is not supported in '
+                'v0.1 minimal scope (only constant int/String/bool values)',
+              ),
+            );
+          } else if (scrutineeSupported) {
+            errors.addAll(
+                _checkCaseValue(result, pattern.expression, scrutineeType));
+          }
+        }
+      case SwitchDefault():
+        break;
+      case SwitchCase():
+        // The pre-Dart-3 non-pattern case form; the parser always produces
+        // SwitchPatternCase for `case <expr>:` today, but SwitchMember is a
+        // sealed class with this as a third variant.
+        errors.add(
+          _error(
+            result,
+            member.offset,
+            'case pattern "${_stripImpl(member)}" is not supported in v0.1 '
+            'minimal scope (only constant int/String/bool values)',
+          ),
+        );
+    }
+
+    for (final inner in member.statements) {
+      errors.addAll(_checkStatement(result, inner, insideLoop: insideLoop));
+    }
+  }
+
+  return errors;
+}
+
+/// A case value must be a literal matching the switch expression's type
+/// exactly — no implicit promotion, matching the "no implicit casts"
+/// precedent used throughout (`docs/mapping.md`).
+List<UnsupportedSyntaxError> _checkCaseValue(
+  ResolvedUnitResult result,
+  Expression expression,
+  DartType scrutineeType,
+) {
+  final matches = (scrutineeType.isDartCoreInt &&
+          expression is IntegerLiteral) ||
+      (scrutineeType.isDartCoreString && expression is SimpleStringLiteral) ||
+      (scrutineeType.isDartCoreBool && expression is BooleanLiteral);
+  if (!matches) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'case value "${_expressionLabel(expression)}" does not match the '
+        'switch expression\'s type '
+        '"${scrutineeType.getDisplayString()}"; v0.1 minimal scope only '
+        'supports constant int/String/bool literals',
+      ),
+    ];
+  }
+  return const [];
 }
 
 List<UnsupportedSyntaxError> _checkExpressionStatement(

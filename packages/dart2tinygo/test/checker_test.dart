@@ -1230,6 +1230,149 @@ void main() {
     });
   });
 
+  group('switch statements', () {
+    test('accepts switch on int with grouped and default cases', () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 2;
+  switch (mode) {
+    case 0:
+      print('off');
+    case 1:
+    case 2:
+      print('on');
+    default:
+      print('?');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts switch on String', () async {
+      final errors = await checkSource('''
+void main() {
+  var name = 'b';
+  switch (name) {
+    case 'a':
+      print('first');
+    case 'b':
+      print('second');
+    default:
+      print('other');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts switch on bool with no default', () async {
+      final errors = await checkSource('''
+void main() {
+  var flag = true;
+  switch (flag) {
+    case true:
+      print('yes');
+    case false:
+      print('no');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts switch nested inside while, with break/continue outside',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  var count = 0;
+  while (count < 3) {
+    switch (count) {
+      case 0:
+        print('zero');
+      default:
+        print('other');
+    }
+    count++;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a switch expression with an unsupported type', () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 1.5;
+  switch (mode) {
+    case 1.5:
+      print('x');
+  }
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('int/String/bool'));
+    });
+
+    test('reports a case value whose type does not match the switch expression',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 1;
+  switch (mode) {
+    case 'a':
+      print('x');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('does not match'));
+    });
+
+    test('reports a case pattern that is not a constant value', () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 1;
+  switch (mode) {
+    case var x:
+      print('hi');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('not supported'));
+    });
+
+    test('reports a "case ... when ..." guard', () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 1;
+  switch (mode) {
+    case 1 when mode > 0:
+      print('x');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('when'));
+    });
+
+    test('reports a labeled switch case', () async {
+      final errors = await checkSource('''
+void main() {
+  var mode = 1;
+  switch (mode) {
+    outer:
+    case 1:
+      print('x');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('labeled'));
+    });
+  });
+
   group('annotation bindings', () {
     test('accepts @GoName calls on @GoType locals and top-level functions',
         () async {

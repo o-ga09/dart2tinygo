@@ -87,6 +87,14 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (list_int_string)
         working-directory: /tmp/dart2tinygo-list-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises switch/case/default (int/String/bool scrutinees, grouped
+      # empty cases, an empty case falling into default).
+      - name: dart2tinygo build (switch_case golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/switch_case.dart -o /tmp/dart2tinygo-switch-out
+      - name: tinygo build -target=${{ matrix.target }} (switch_case)
+        working-directory: /tmp/dart2tinygo-switch-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Exercises top-level functions beyond main: parameters, return,
       # expression bodies, recursion, forward references.
       - name: dart2tinygo build (top_level_functions golden case)

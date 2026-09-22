@@ -163,6 +163,29 @@ Go の `string` をスライスするのにバイトかルーンのインデッ�
 | `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
 | `a.codeUnits` | `[]byte(a)`（上の「List<int>」を参照） |
 
+## switch 文（2026-09-22 決定、実装済み）
+
+`switch` は Go 自身の `switch` に対応する。Dart 3 と Go はどちらもデフォルトで
+fallthrough しないので、case を終わらせるための `break` は生成側で不要（v0.1 では
+`switch` の `case` 内の裸の `break;` を特別扱いしない — 他の場所と同じ「while/for
+ループの内側でのみ有効」というチェックをそのまま通す。現時点の用途では不要なため）。
+
+定数値の `case` のみ、かつ `int`/`String`/`bool` の switch 式に限定する — Go の
+`switch` にはパターンマッチがないため、定数以外の Dart 3 パターン
+（`case var x:`、デストラクチャリング、オブジェクトパターン）はチェッカーが拒否する。
+`case ... when ...` ガードやラベル付き case も同様に拒否する。
+
+| Dart | Go |
+| --- | --- |
+| `switch (x) { case 0: ...; case 1: ...; default: ...; }` | `switch x { case 0: ...; case 1: ...; default: ...; }` — そのまま |
+| `case a: case b: <body>`（連続する空の case） | `case a, b: <body>` — Dart の case グルーピング構文は文ではないので、隣接する空の case はカンマ区切りの値リストを持つ 1 つの Go `case` にまとめる |
+| `case a: /* 何もせず default に落ちる */ default: <body>` | `default: <body>`（`a` の case は削除され、まとめられない）— Go の `default` には値リストがないが、他のどの `case` にも該当しない値は元々すべて `default` にマッチするので、空の case が `default` に落ちるのと結果的に同じになる |
+| `case 'x':` / `case true:` | `case "x":` / `case true:` — case の値は switch 式と同じ型のリテラルでなければならず、暗黙の変換はしない |
+
+v0.1 のスコープ外：`case ... when ...` ガード、定数以外／デストラクチャリングの
+パターン、`switch` 内での `for`/`for-in` ラベルターゲット、enum 値の case（`enum`
+対応待ち。型対応表を参照）。
+
 ## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
 | Dart | Go | 状態 |
@@ -179,7 +202,8 @@ Go の `string` をスライスするのにバイトかルーンのインデッ�
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 — 上の「トップレベル関数」を参照 | 実装済 |
 | `if` / `else if` / `else` | そのまま対応。各分岐は必ずブロック（上の v0.1 の表を参照） | 実装済 |
 | `while`（一般条件）/ `for`（宣言変数1つ、updater1つ）/ `break` / `continue` | そのまま対応。上の v0.1 の表を参照 | 実装済 |
-| `for-in` / `switch` | `for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
+| `for-in` | → `range` | 決定（v0.2） |
+| `switch` | `switch`。定数の `int`/`String`/`bool` case のみ、fallthrough なし、空の case はまとめる／削除する — 上の「switch 文」を参照 | 実装済 |
 | カスケード `a..b()..c()` | 一時変数 + 文の列 | 決定 |
 | `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |
 | 継承・mixin・ジェネリクス・`T?`・`throw`/例外・`async` | checker が拒否 | 決定（将来） |
