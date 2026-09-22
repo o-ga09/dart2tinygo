@@ -17,8 +17,7 @@ GitHub Actions が行います。このリポジトリのパッケージはす�
    `minor` / `major` ラベルを付ける（tagpr が再実行して PR を更新する）。
 4. リリース PR をマージすると `vX.Y.Z` タグと GitHub Release が作られる。
 5. タグ push で `publish.yml` が走り、依存順に
-   `tinygo_annotations` → `wio_terminal` → `dart2tinygo` を公開する。
-   `tinygo_machine` はスケルトンなので、実装が入るまで `publish_to: none` のまま。
+   `tinygo_annotations` → `tinygo_machine` → `wio_terminal` → `dart2tinygo` を公開する。
 
 `CHANGELOG.md` はリポジトリルートに 1 つだけ置き、pub.dev はパッケージごとに
 必要とするため `publish.yml` が公開前に各パッケージへコピーします。
@@ -33,7 +32,7 @@ pub.dev の自動公開は既存パッケージにしか設定できないため
 
 ```sh
 dart pub get
-for pkg in tinygo_annotations wio_terminal dart2tinygo; do
+for pkg in tinygo_annotations tinygo_machine wio_terminal dart2tinygo; do
   cp CHANGELOG.md packages/$pkg/CHANGELOG.md
   (cd packages/$pkg && dart pub publish)
 done
@@ -41,7 +40,7 @@ done
 
 ### 2. pub.dev で自動公開を有効化
 
-3 パッケージそれぞれの pub.dev **Admin** タブで
+4 パッケージそれぞれの pub.dev **Admin** タブで
 **Automated publishing → Publishing from GitHub Actions** を次の値で有効化：
 
 - Repository: `o-ga09/dart2tinygo`
@@ -76,6 +75,7 @@ Run workflow** で ref にタグ `vX.Y.Z` を選ぶ。pub.dev はトークンの
 dart pub get
 dart analyze
 (cd packages/dart2tinygo && dart test)
+(cd packages/tinygo_machine && dart pub publish --dry-run)
 (cd packages/wio_terminal && dart pub publish --dry-run)
 dart tool/sync_versions.dart 0.2.0   # tagpr の postVersionCommand と同じ処理
 ```

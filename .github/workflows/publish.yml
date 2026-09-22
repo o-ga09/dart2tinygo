@@ -30,11 +30,14 @@ jobs:
       # expects one per package.
       - name: Copy CHANGELOG.md into each package
         run: |
-          for pkg in tinygo_annotations wio_terminal dart2tinygo; do
+          for pkg in tinygo_annotations tinygo_machine wio_terminal dart2tinygo; do
             cp CHANGELOG.md packages/$pkg/CHANGELOG.md
           done
       - name: Publish tinygo_annotations
         working-directory: packages/tinygo_annotations
+        run: dart pub publish --force
+      - name: Publish tinygo_machine
+        working-directory: packages/tinygo_machine
         run: dart pub publish --force
       - name: Publish wio_terminal
         working-directory: packages/wio_terminal

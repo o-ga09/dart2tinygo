@@ -2,6 +2,8 @@
 
 **Languages:** English | [日本語](./README.ja.md)
 
+[![pub package](https://img.shields.io/pub/v/tinygo_machine.svg)](https://pub.dev/packages/tinygo_machine)
+
 Board-agnostic bindings corresponding to TinyGo's `machine` package (GPIO, ADC, LED).
 
 Following the design principle of not putting board-specific code into the core (`packages/dart2tinygo`), this package only deals with functionality that TinyGo provides in common. Board-specific bindings live in separate packages (e.g. `package:wio_terminal`).

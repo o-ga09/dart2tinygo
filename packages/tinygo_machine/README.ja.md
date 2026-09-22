@@ -2,6 +2,8 @@
 
 **Languages:** [English](./README.md) | 日本語
 
+[![pub package](https://img.shields.io/pub/v/tinygo_machine.svg)](https://pub.dev/packages/tinygo_machine)
+
 TinyGo の `machine` パッケージ（GPIO、ADC、LED）に対応する、ボード非依存のバインディング。
 
 本体（`packages/dart2tinygo`）にボード固有コードを入れないという設計原則のもと、ここは TinyGo が共通で提供する機能のみを扱う。ボード固有のバインディングは別パッケージ（例: `package:wio_terminal`）とする。
