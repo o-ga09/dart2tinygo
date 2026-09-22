@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.2](https://github.com/o-ga09/dart2tinygo/compare/v0.0.1...v0.0.2) - 2026-09-22
+
+- feat: remaining tinygo_machine/wio_terminal bindings (#44, #12-20, #22-23) by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/46
+- feat: examples/wioterminal_demo booth demo covering every Wio Terminal binding by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/47
+- docs: switch usage docs to the dart2tinygo CLI, drop HANDOFF references by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/48
+- docs: fix version labels to follow the actual v0.0.N release scheme by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/49
+
 ## [v0.0.1](https://github.com/o-ga09/dart2tinygo/commits/v0.0.1) - 2026-09-22
 
 - build(deps): bump GitHub Actions (consolidates Dependabot #1–#4) by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/5
