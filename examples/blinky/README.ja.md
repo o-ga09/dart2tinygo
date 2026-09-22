@@ -33,11 +33,11 @@ void main() {
 ```sh
 # 1. 依存解決（初回のみ。リポジトリルートで実行 — pub workspace）
 dart pub get
+dart pub global activate dart2tinygo   # 一度だけ。`dart2tinygo` CLI をインストールする
 
 # 2. Go に変換して書き込み — ボードに合わせて TinyGo ターゲットを指定
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart flash ../../examples/blinky/main.dart \
-  -o ../../examples/blinky/build --target=wioterminal   # 例: pico なら --target=pico
+dart2tinygo flash examples/blinky/main.dart \
+  -o examples/blinky/build --target=wioterminal   # 例: pico なら --target=pico
 ```
 
 ## 生成される Go

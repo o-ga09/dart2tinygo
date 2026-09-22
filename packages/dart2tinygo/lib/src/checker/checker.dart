@@ -5,8 +5,7 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:dart2tinygo/src/frontend/bindings.dart';
 
 /// A single instance of Dart syntax that is outside the currently supported
-/// subset. Reported with file/line so it can be surfaced by `check`/`build`
-/// the way `HANDOFF_dart2tinygo.md` §4.1/§4.2 describes.
+/// subset. Reported with file/line so it can be surfaced by `check`/`build`.
 class UnsupportedSyntaxError {
   UnsupportedSyntaxError({
     required this.filePath,

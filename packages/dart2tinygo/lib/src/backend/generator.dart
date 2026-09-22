@@ -6,9 +6,9 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:dart2tinygo/src/frontend/bindings.dart';
 
-/// The result of converting a checked entry point to Go source, per
-/// `HANDOFF_dart2tinygo.md` §4.2/§4.4: no `fmt.Sprintf`, string
-/// interpolation is concatenated with `strconv` based on type.
+/// The result of converting a checked entry point to Go source: no
+/// `fmt.Sprintf`, string interpolation is concatenated with `strconv`
+/// based on type.
 ///
 /// Callers must have already run [checkEntryPoint] and confirmed there are
 /// no [UnsupportedSyntaxError]s; this generator assumes the AST matches the

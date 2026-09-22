@@ -2,9 +2,9 @@
 
 **Languages:** [English](./README.md) | 日本語
 
-[![pub package](https://img.shields.io/pub/v/dart2tinygo.svg)](https://pub.dev/packages/dart2tinygo)
-[![pub package](https://img.shields.io/pub/v/tinygo_annotations.svg)](https://pub.dev/packages/tinygo_annotations)
-[![pub package](https://img.shields.io/pub/v/wio_terminal.svg)](https://pub.dev/packages/wio_terminal)
+[![dart2tinygo pub package](https://img.shields.io/pub/v/dart2tinygo.svg?label=dart2tinygo)](https://pub.dev/packages/dart2tinygo)
+[![tinygo_annotations pub package](https://img.shields.io/pub/v/tinygo_annotations.svg?label=tinygo_annotations)](https://pub.dev/packages/tinygo_annotations)
+[![wio_terminal pub package](https://img.shields.io/pub/v/wio_terminal.svg?label=wio_terminal)](https://pub.dev/packages/wio_terminal)
 
 Dart のサブセットを TinyGo のソースコードに変換し、マイコンで動かすための OSS です。
 
@@ -61,9 +61,9 @@ func main() {
 ```
 
 ```sh
-dart pub get   # リポジトリルートで一度だけ（pub workspace）
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart flash ../../examples/hello_wioterminal/main.dart -o ../../examples/hello_wioterminal/build --target=wioterminal
+dart pub get                           # リポジトリルートで一度だけ（pub workspace）
+dart pub global activate dart2tinygo   # 一度だけ。`dart2tinygo` CLI をインストールする
+dart2tinygo flash examples/hello_wioterminal/main.dart -o examples/hello_wioterminal/build --target=wioterminal
 ```
 
 ボード固有の部分（`newDisplay`、`drawText`）は

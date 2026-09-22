@@ -34,11 +34,11 @@ void main() {
 ```sh
 # 1. Resolve dependencies (once, at the repository root — it is a pub workspace)
 dart pub get
+dart pub global activate dart2tinygo   # once, installs the `dart2tinygo` CLI
 
 # 2. Convert to Go and flash — pick the TinyGo target for your board
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart flash ../../examples/blinky/main.dart \
-  -o ../../examples/blinky/build --target=wioterminal   # or e.g. --target=pico
+dart2tinygo flash examples/blinky/main.dart \
+  -o examples/blinky/build --target=wioterminal   # or e.g. --target=pico
 ```
 
 ## Generated Go

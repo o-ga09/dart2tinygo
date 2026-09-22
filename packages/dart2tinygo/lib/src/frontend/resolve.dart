@@ -6,8 +6,8 @@ import 'package:analyzer/file_system/physical_file_system.dart';
 import 'package:path/path.dart' as p;
 
 /// Parses and type-resolves the Dart entry point at [entryPath] using
-/// `package:analyzer`'s [AnalysisContextCollection], as decided in
-/// `HANDOFF_dart2tinygo.md` §4.2 (resolved AST, not bare `parseString`).
+/// `package:analyzer`'s [AnalysisContextCollection] (resolved AST, not
+/// bare `parseString`).
 Future<ResolvedUnitResult> resolveEntryPoint(String entryPath) async {
   final absolutePath = p.normalize(p.absolute(entryPath));
   if (!File(absolutePath).existsSync()) {

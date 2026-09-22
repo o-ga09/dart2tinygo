@@ -19,10 +19,12 @@ See [`docs/supported_features.md`](../../docs/supported_features.md) for the
 exact scope and [`docs/mapping.md`](../../docs/mapping.md) for the
 conversion rules.
 
-```
-dart run bin/dart2tinygo.dart check <entry.dart>
-dart run bin/dart2tinygo.dart build <entry.dart> [-o out_dir]
-dart run bin/dart2tinygo.dart flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]
+```sh
+dart pub global activate dart2tinygo   # once
+
+dart2tinygo check <entry.dart>
+dart2tinygo build <entry.dart> [-o out_dir]
+dart2tinygo flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]
 ```
 
 See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the design principles and workflow.

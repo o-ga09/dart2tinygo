@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 /// `dart2tinygo flash` (#26): argument handling and the missing-`tinygo`
 /// error. No hardware in CI, so the happy path (an actual flash) is not
 /// covered here — only that `flash` builds first and then hands off to
-/// `tinygo flash`, per `HANDOFF_dart2tinygo.md` §4.1 / §7 task 5.
+/// `tinygo flash`.
 void main() {
   final entry = p.join('test', 'golden', 'minimal_blink.dart');
 

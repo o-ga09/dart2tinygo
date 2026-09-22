@@ -31,11 +31,11 @@ void main() {
 ```sh
 # 1. Resolve dependencies (once, at the repository root — it is a pub workspace)
 dart pub get
+dart pub global activate dart2tinygo   # once, installs the `dart2tinygo` CLI
 
 # 2. Convert to Go (writes main.go and go.mod, runs `go mod tidy`) and flash
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart flash ../../examples/hello_wioterminal/main.dart \
-  -o ../../examples/hello_wioterminal/build --target=wioterminal
+dart2tinygo flash examples/hello_wioterminal/main.dart \
+  -o examples/hello_wioterminal/build --target=wioterminal
 ```
 
 The screen turns black and the text appears in white, in landscape
