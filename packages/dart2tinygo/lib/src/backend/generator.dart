@@ -50,6 +50,26 @@ class GoDeps {
   /// chaining") — monotonically increasing across the whole file keeps every
   /// temp unique regardless of which function it's minted in.
   int nextTempId = 0;
+
+  /// Set while writing a class's constructor/method body (#32), so a field
+  /// reference — implicit `this` (`value`) or explicit (`this.value`) —
+  /// knows which Go receiver variable to qualify itself with. `null`
+  /// everywhere else (top-level functions have no receiver). Read by
+  /// [_writeFieldAccess]; set/cleared around each body by
+  /// [_writeConstructor]/[_writeMethodDeclaration], the same way `deps`
+  /// itself is threaded through the whole tree walk rather than as a
+  /// function parameter, since generation is single-threaded and strictly
+  /// nested.
+  MethodScope? methodScope;
+}
+
+/// See [GoDeps.methodScope].
+class MethodScope {
+  MethodScope(this.receiver);
+
+  /// The Go receiver variable name (`docs/mapping.md`: the class's own name,
+  /// first letter lowercased — `Counter` → `c`).
+  final String receiver;
 }
 
 /// Converts every top-level function and enum of a checked
@@ -66,6 +86,8 @@ Future<GeneratedGoFile> generateGoFile(ResolvedUnitResult result) async {
       _writeFunctionDeclaration(declaration, funcsBuffer, deps);
     } else if (declaration is EnumDeclaration) {
       _writeEnumDeclaration(declaration, funcsBuffer, deps);
+    } else if (declaration is ClassDeclaration) {
+      _writeClassDeclaration(declaration, funcsBuffer, deps);
     }
   }
 
@@ -183,6 +205,140 @@ String _capitalize(String s) =>
 String _lowerFirst(String s) =>
     s.isEmpty ? s : '${s[0].toLowerCase()}${s.substring(1)}';
 
+/// `class Foo { ... }` (#32, `docs/mapping.md` "class (no inheritance)"):
+/// `type Foo struct { ... }` (one field per `FieldDeclaration` variable, in
+/// declaration order) + `func NewFoo(...) *Foo { ... }` + one pointer-
+/// receiver method per `MethodDeclaration`. The checker
+/// (`_checkClassDeclaration`) has already confirmed exactly one plain
+/// generative constructor and only plain instance fields/methods, so this
+/// only needs to walk `declaration.body.members` and emit each kind.
+void _writeClassDeclaration(
+  ClassDeclaration declaration,
+  StringBuffer out,
+  GoDeps deps,
+) {
+  final name = declaration.declaredFragment!.element.name!;
+
+  out.writeln('type $name struct {');
+  for (final member in declaration.body.members) {
+    if (member is! FieldDeclaration) continue;
+    for (final variable in member.fields.variables) {
+      final type = variable.declaredFragment!.element.type;
+      out.writeln('\t${variable.name.lexeme} ${_goTypeName(type, deps)}');
+    }
+  }
+  out.writeln('}');
+  out.writeln();
+
+  final constructor =
+      declaration.body.members.whereType<ConstructorDeclaration>().first;
+  _writeConstructor(name, constructor, out, deps);
+
+  for (final member in declaration.body.members) {
+    if (member is MethodDeclaration) {
+      _writeMethodDeclaration(name, member, out, deps);
+    }
+  }
+}
+
+/// The Go receiver variable name for a class named [className]: its own
+/// first letter, lowercased (`Counter` → `c`, `docs/mapping.md`).
+String _receiverName(String className) => className.substring(0, 1).toLowerCase();
+
+/// `Foo(<params>) { ... }` (a class's single generative constructor, #32):
+/// each `this.field` parameter becomes a struct-literal field; any
+/// remaining body statements run afterward with the receiver already
+/// holding those fields, the same way a method body does
+/// ([_writeMethodDeclaration]). A trivial constructor (`this.x` parameters
+/// only, no body) skips the intermediate receiver local entirely and
+/// returns the struct literal directly, matching the shape a human would
+/// write by hand.
+void _writeConstructor(
+  String className,
+  ConstructorDeclaration constructor,
+  StringBuffer out,
+  GoDeps deps,
+) {
+  final parameters = constructor.parameters.parameters;
+  final paramGo = parameters.map((parameter) {
+    if (parameter is FieldFormalParameter) {
+      final element = parameter.declaredFragment!.element;
+      return '${parameter.name.lexeme} ${_goTypeName(element.type, deps)}';
+    }
+    final simple = parameter as SimpleFormalParameter;
+    return '${simple.name!.lexeme} '
+        '${_goTypeName(simple.declaredFragment!.element.type, deps)}';
+  }).join(', ');
+
+  final fieldInits = parameters
+      .whereType<FieldFormalParameter>()
+      .map((p) => '${p.name.lexeme}: ${p.name.lexeme}')
+      .join(', ');
+
+  final body = constructor.body;
+  final statements =
+      body is BlockFunctionBody ? body.block.statements : const <Statement>[];
+
+  out.writeln('func New$className($paramGo) *$className {');
+  if (statements.isEmpty) {
+    out.writeln('\treturn &$className{$fieldInits}');
+  } else {
+    final receiver = _receiverName(className);
+    out.writeln('\t$receiver := &$className{$fieldInits}');
+    deps.methodScope = MethodScope(receiver);
+    for (final statement in statements) {
+      _writeStatement(statement, out, deps, indent: '\t');
+    }
+    deps.methodScope = null;
+    out.writeln('\treturn $receiver');
+  }
+  out.writeln('}');
+  out.writeln();
+}
+
+/// A pointer-receiver instance method (#32): `func (c *Foo) name(...) T {
+/// ... }`, identical in shape to a top-level function
+/// ([_writeFunctionDeclaration]) plus the receiver clause. The body is
+/// written with [GoDeps.methodScope] set so a field reference inside it
+/// resolves to `<receiver>.<field>` ([_writeFieldAccess]).
+void _writeMethodDeclaration(
+  String className,
+  MethodDeclaration method,
+  StringBuffer out,
+  GoDeps deps,
+) {
+  final receiver = _receiverName(className);
+  final parameters = method.parameters?.parameters ?? const <FormalParameter>[];
+  final paramGo = parameters
+      .cast<SimpleFormalParameter>()
+      .map((p) =>
+          '${p.name!.lexeme} ${_goTypeName(p.declaredFragment!.element.type, deps)}')
+      .join(', ');
+
+  final returnType = method.returnType?.type;
+  final isVoidReturn = returnType == null || returnType is VoidType;
+  final returnGo = isVoidReturn ? '' : ' ${_goTypeName(returnType, deps)}';
+
+  out.writeln(
+      'func ($receiver *$className) ${method.name.lexeme}($paramGo)$returnGo {');
+  deps.methodScope = MethodScope(receiver);
+  final body = method.body;
+  if (body is BlockFunctionBody) {
+    for (final statement in body.block.statements) {
+      _writeStatement(statement, out, deps, indent: '\t');
+    }
+  } else if (body is ExpressionFunctionBody) {
+    if (isVoidReturn) {
+      _writeExpressionStatement(body.expression, out, deps, indent: '\t');
+    } else {
+      out.writeln('\treturn ${_writeExpression(body.expression, deps)}');
+    }
+  }
+  deps.methodScope = null;
+  out.writeln('}');
+  out.writeln();
+}
+
 /// The Go type expression for a Dart type the checker has already confirmed
 /// is supported (`_isSupportedType`) — used for parameter and return types,
 /// which (unlike locals) Go's syntax requires spelling out explicitly. A
@@ -206,6 +362,11 @@ String _goTypeName(DartType type, GoDeps deps) {
   }
   if (type is InterfaceType && type.element is EnumElement) {
     return type.element.name!;
+  }
+  if (type is InterfaceType && type.element is ClassElement) {
+    // A user class instance is always `*Foo` (#32, `docs/mapping.md`: Dart
+    // reference semantics, `==` is identity).
+    return '*${type.element.name}';
   }
   throw StateError('unchecked Go type: ${type.getDisplayString()}');
 }
@@ -453,6 +614,11 @@ void _writeExpressionStatement(
       out.writeln('$indent$bound');
       return;
     }
+    final instanceCall = _writeInstanceMethodCall(expression, deps);
+    if (instanceCall != null) {
+      out.writeln('$indent$instanceCall');
+      return;
+    }
   }
 
   throw StateError(
@@ -507,11 +673,13 @@ String? _writeListAdd(MethodInvocation call, GoDeps deps) {
 /// for-loop post-clause. Recorded in `docs/mapping.md`.
 String _writeUpdaterExpression(Expression expression, GoDeps deps) {
   if (expression is PostfixExpression) {
-    final target = (expression.operand as SimpleIdentifier).name;
+    final target =
+        _writeWriteTarget(expression.operand, expression.writeElement, deps);
     return '$target${expression.operator.lexeme}';
   }
   if (expression is AssignmentExpression) {
-    final target = (expression.leftHandSide as SimpleIdentifier).name;
+    final target = _writeWriteTarget(
+        expression.leftHandSide, expression.writeElement, deps);
     final rhs = _writeExpression(expression.rightHandSide, deps);
     final op = expression.operator.lexeme;
     if (op == '%=') return '$target = ${_useDartrt(deps)}.Mod($target, $rhs)';
@@ -519,6 +687,38 @@ String _writeUpdaterExpression(Expression expression, GoDeps deps) {
     return '$target $op $rhs';
   }
   throw StateError('unchecked updater expression: ${expression.runtimeType}');
+}
+
+/// [target] (a `PostfixExpression`'s operand, or an `AssignmentExpression`'s
+/// `leftHandSide`) as a Go lvalue: a bare local's own name, or — when
+/// [writeElement] is a `SetterElement`, #32 — a field write (`c.value`/
+/// `this.value`/bare `value` with implicit `this`), qualified with its
+/// receiver the same way a read is ([_writeFieldAccess]). [writeElement]
+/// (not [target] itself) is the reliable way to tell the two apart: a
+/// write-only position like this leaves `target`'s own `.element` `null`
+/// (see `docs/mapping.md`), unlike a value-position read.
+String _writeWriteTarget(Expression target, Element? writeElement, GoDeps deps) {
+  if (writeElement is! SetterElement) return (target as SimpleIdentifier).name;
+
+  final Expression? receiverTarget;
+  final String name;
+  switch (target) {
+    case SimpleIdentifier():
+      receiverTarget = null;
+      name = target.name;
+    case PrefixedIdentifier():
+      receiverTarget = target.prefix;
+      name = target.identifier.name;
+    case PropertyAccess():
+      receiverTarget = target.target;
+      name = target.propertyName.name;
+    default:
+      throw StateError('unchecked field write target: ${target.runtimeType}');
+  }
+  final receiver = receiverTarget == null || receiverTarget is ThisExpression
+      ? deps.methodScope!.receiver
+      : _writeExpression(receiverTarget, deps);
+  return '$receiver.$name';
 }
 
 /// `print(x)` takes any `String` expression; interpolation is concatenated
@@ -607,11 +807,15 @@ String _writeExpression(Expression expression, GoDeps deps) {
     if (builtinGetter != null) return builtinGetter;
     final constant = _writeConstantReference(expression, deps);
     if (constant != null) return constant;
+    final field = _writeFieldAccess(expression, deps);
+    if (field != null) return field;
     return expression.name;
   }
   if (expression is PropertyAccess) {
     final builtinGetter = _writeBuiltinGetter(expression, deps);
     if (builtinGetter != null) return builtinGetter;
+    final field = _writeFieldAccess(expression, deps);
+    if (field != null) return field;
   }
   if (expression is MethodInvocation) {
     final conversion = _writeNumConversion(expression, deps);
@@ -622,10 +826,14 @@ String _writeExpression(Expression expression, GoDeps deps) {
     if (localCall != null) return localCall;
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) return bound;
+    final instanceCall = _writeInstanceMethodCall(expression, deps);
+    if (instanceCall != null) return instanceCall;
   }
   if (expression is InstanceCreationExpression) {
     final fromCharCodes = _writeFromCharCodes(expression, deps);
     if (fromCharCodes != null) return fromCharCodes;
+    final classConstruction = _writeClassConstruction(expression, deps);
+    if (classConstruction != null) return classConstruction;
   }
   if (expression is ListLiteral) {
     final elements = expression.elements
@@ -851,6 +1059,89 @@ String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
     return '${binding.goName}($args)';
   }
   return '${_writeExpression(target, deps)}.${binding.goName}($args)';
+}
+
+/// A call to an instance method of a user class (#32, `docs/mapping.md`):
+/// `c.inc()`, `this.inc()`, or a bare `inc()` inside another method/
+/// constructor of the same class (implicit `this`) — the class counterpart
+/// of [_writeBoundCall]. `this`/implicit-`this` become the enclosing
+/// method's own receiver variable ([GoDeps.methodScope]), the same way
+/// [_writeFieldAccess] resolves them.
+///
+/// Returns `null` when [call] isn't this shape, so the caller falls through
+/// to its usual call handling.
+String? _writeInstanceMethodCall(MethodInvocation call, GoDeps deps) {
+  final callee = call.methodName.element;
+  if (callee is! MethodElement || callee.isExternal || callee.isStatic) {
+    return null;
+  }
+  final args = call.argumentList.arguments
+      .map((arg) => _writeExpression(arg, deps))
+      .join(', ');
+  final target = call.target;
+  final receiver = target == null || target is ThisExpression
+      ? deps.methodScope!.receiver
+      : _writeExpression(target, deps);
+  return '$receiver.${call.methodName.name}($args)';
+}
+
+/// A field access — implicit `this` (`value`), `this.value`, or `c.value`
+/// on a local/field holding a user-class instance (#32, `docs/mapping.md`).
+/// Every shape maps onto the same Go form, `<receiver>.<field>` — `this`
+/// becomes the enclosing method's own receiver variable
+/// ([GoDeps.methodScope]).
+///
+/// Returns `null` when [expression] isn't a field access, so the caller
+/// falls through to its usual identifier/property handling.
+String? _writeFieldAccess(Expression expression, GoDeps deps) {
+  final Expression? target;
+  final Element? element;
+  final String name;
+  switch (expression) {
+    case SimpleIdentifier():
+      target = null;
+      element = expression.element;
+      name = expression.name;
+    case PrefixedIdentifier():
+      target = expression.prefix;
+      element = expression.identifier.element;
+      name = expression.identifier.name;
+    case PropertyAccess():
+      final propertyTarget = expression.target;
+      if (propertyTarget == null) return null;
+      target = propertyTarget;
+      element = expression.propertyName.element;
+      name = expression.propertyName.name;
+    default:
+      return null;
+  }
+  if (element is! GetterElement || element.variable is! FieldElement) {
+    return null;
+  }
+  final receiver = target == null || target is ThisExpression
+      ? deps.methodScope!.receiver
+      : _writeExpression(target, deps);
+  return '$receiver.$name';
+}
+
+/// `Counter(0)` — a call to a user class's own (non-`@GoType`) generative
+/// constructor, #32 → `NewCounter(0)` (`docs/mapping.md`).
+///
+/// Returns `null` when [creation] isn't this shape, so the caller falls
+/// through to its usual unsupported-expression handling.
+String? _writeClassConstruction(
+  InstanceCreationExpression creation,
+  GoDeps deps,
+) {
+  final element = creation.constructorName.element;
+  if (element is! ConstructorElement) return null;
+  final cls = element.enclosingElement;
+  if (cls is! ClassElement || goTypeOf(cls) != null) return null;
+
+  final args = creation.argumentList.arguments
+      .map((arg) => _writeExpression(arg, deps))
+      .join(', ');
+  return 'New${cls.name}($args)';
 }
 
 /// `a..b()..c()`: not a single Go expression, so this only handles the two

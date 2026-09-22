@@ -43,6 +43,7 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   FunctionDeclaration? mainDecl;
   final functions = <FunctionDeclaration>[];
   final enums = <EnumDeclaration>[];
+  final classes = <ClassDeclaration>[];
   for (final declaration in unit.declarations) {
     if (declaration is FunctionDeclaration) {
       functions.add(declaration);
@@ -60,13 +61,18 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
       enums.add(declaration);
       continue;
     }
+    if (declaration is ClassDeclaration) {
+      classes.add(declaration);
+      continue;
+    }
     errors.add(
       _error(
         result,
         declaration.offset,
         'top-level "${_declarationLabel(declaration)}" is not supported yet; '
-        'v0.1 minimal scope only supports top-level functions, enum '
-        'declarations, and a single void main()',
+        'v0.1/v0.2 minimal scope only supports top-level functions, enum '
+        'declarations, class declarations (no inheritance), and a single '
+        'void main()',
       ),
     );
   }
@@ -90,6 +96,10 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
 
   for (final enumDeclaration in enums) {
     errors.addAll(_checkEnumDeclaration(result, enumDeclaration));
+  }
+
+  for (final classDeclaration in classes) {
+    errors.addAll(_checkClassDeclaration(result, classDeclaration));
   }
 
   return errors;
@@ -184,6 +194,455 @@ List<UnsupportedSyntaxError> _checkEnumDeclaration(
 String _enumName(EnumDeclaration declaration) {
   final namePart = declaration.namePart;
   return namePart is NameWithTypeParameters ? namePart.typeName.lexeme : '?';
+}
+
+/// `class Foo { ... }` (#32, v0.2, `docs/mapping.md` "class (no
+/// inheritance)"): no type parameters, no `extends`/`implements`/`with`
+/// clause or class modifier (`abstract`/`base`/`final`/`interface`/`mixin`/
+/// `sealed`); a field declares one of the supported types (no initializer —
+/// every field must be set by the constructor); exactly one constructor,
+/// unnamed, non-`const`, non-`factory`, with no initializer list, whose
+/// parameters are `this.field` (positional) or plain positional parameters;
+/// and any number of non-`static`/non-`abstract`/non-getter/non-setter/
+/// non-operator instance methods. A constructor/method body is checked the
+/// same way a top-level function's is, via [_checkStatement]/
+/// [_checkExpression] — instance field access (`c.field`, implicit or
+/// explicit `this`) and instance method calls are recognized generically by
+/// those, from the resolved element alone (see [_checkFieldAccess],
+/// [_isUserClassMethodCall]), so no separate "current class" context needs
+/// threading through them.
+List<UnsupportedSyntaxError> _checkClassDeclaration(
+  ResolvedUnitResult result,
+  ClassDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  final name = _className(declaration);
+
+  final namePart = declaration.namePart;
+  if (namePart is! NameWithTypeParameters || namePart.typeParameters != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$name" must not have type parameters in v0.2 minimal scope',
+      ),
+    );
+  }
+  if (declaration.extendsClause != null ||
+      declaration.withClause != null ||
+      declaration.implementsClause != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$name" must not use "extends"/"with"/"implements" in v0.2 '
+        'minimal scope (no inheritance)',
+      ),
+    );
+  }
+  if (declaration.abstractKeyword != null ||
+      declaration.baseKeyword != null ||
+      declaration.finalKeyword != null ||
+      declaration.interfaceKeyword != null ||
+      declaration.mixinKeyword != null ||
+      declaration.sealedKeyword != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$name" must not use a class modifier (abstract/base/final/'
+        'interface/mixin/sealed) in v0.2 minimal scope',
+      ),
+    );
+  }
+
+  final constructors = <ConstructorDeclaration>[];
+  for (final member in declaration.body.members) {
+    switch (member) {
+      case FieldDeclaration():
+        errors.addAll(_checkFieldDeclaration(result, name, member));
+      case ConstructorDeclaration():
+        constructors.add(member);
+      case MethodDeclaration():
+        errors.addAll(_checkMethodDeclaration(result, name, member));
+      default:
+        // A primary-constructor body (Dart's still-experimental class-header
+        // constructor syntax) or another future `ClassMember` variant.
+        errors.add(
+          _error(
+            result,
+            member.offset,
+            'class "$name" member "${_stripImpl(member)}" is not supported '
+            'in v0.2 minimal scope',
+          ),
+        );
+    }
+  }
+
+  if (constructors.isEmpty) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$name" must declare exactly one constructor in v0.2 minimal '
+        'scope (no inheritance means there is no implicit default '
+        'constructor to fall back on here)',
+      ),
+    );
+  } else if (constructors.length > 1) {
+    for (final extra in constructors.skip(1)) {
+      errors.add(
+        _error(
+          result,
+          extra.offset,
+          'class "$name" must declare exactly one constructor in v0.2 '
+          'minimal scope',
+        ),
+      );
+    }
+    errors.addAll(_checkConstructorDeclaration(result, name, constructors.first));
+  } else {
+    errors.addAll(_checkConstructorDeclaration(result, name, constructors.single));
+  }
+
+  return errors;
+}
+
+String _className(ClassDeclaration declaration) {
+  final namePart = declaration.namePart;
+  return namePart is NameWithTypeParameters ? namePart.typeName.lexeme : '?';
+}
+
+List<UnsupportedSyntaxError> _checkFieldDeclaration(
+  ResolvedUnitResult result,
+  String className,
+  FieldDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  if (declaration.isStatic) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$className" field must not be static in v0.2 minimal scope',
+      ),
+    );
+    return errors;
+  }
+  if (declaration.fields.lateKeyword != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$className" field must not be "late" in v0.2 minimal scope',
+      ),
+    );
+  }
+  if (declaration.fields.type?.question != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$className" field type must not be nullable ("T?") in v0.2 '
+        'minimal scope',
+      ),
+    );
+  }
+  for (final variable in declaration.fields.variables) {
+    if (variable.initializer != null) {
+      errors.add(
+        _error(
+          result,
+          variable.offset,
+          'class "$className" field "${variable.name.lexeme}" must not have '
+          'an initializer in v0.2 minimal scope; initialize it via the '
+          'constructor instead',
+        ),
+      );
+      continue;
+    }
+    final type = variable.declaredFragment?.element.type;
+    if (!_isSupportedType(type)) {
+      errors.add(
+        _error(
+          result,
+          variable.offset,
+          'class "$className" field "${variable.name.lexeme}" has type '
+          '"${type?.getDisplayString() ?? '?'}", but only '
+          '$_supportedTypesLabel are supported',
+        ),
+      );
+    }
+  }
+  return errors;
+}
+
+List<UnsupportedSyntaxError> _checkConstructorDeclaration(
+  ResolvedUnitResult result,
+  String className,
+  ConstructorDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+
+  if (declaration.name != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$className" constructor must be unnamed in v0.2 minimal '
+        'scope',
+      ),
+    );
+  }
+  if (declaration.constKeyword != null ||
+      declaration.factoryKeyword != null ||
+      declaration.externalKeyword != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        'class "$className" constructor must be a plain generative '
+        'constructor (no const/factory/external) in v0.2 minimal scope',
+      ),
+    );
+  }
+  if (declaration.initializers.isNotEmpty) {
+    errors.add(
+      _error(
+        result,
+        declaration.initializers.first.offset,
+        'class "$className" constructor must not use an initializer list '
+        '(": field = expr, ...") in v0.2 minimal scope; use a "this.field" '
+        'parameter or a field assignment in the constructor body instead',
+      ),
+    );
+  }
+
+  for (final parameter in declaration.parameters.parameters) {
+    if (parameter is FieldFormalParameter) {
+      if (parameter.type?.question != null) {
+        errors.add(
+          _error(
+            result,
+            parameter.offset,
+            'class "$className" constructor parameter '
+            '"this.${parameter.name.lexeme}" must not be nullable ("T?") in '
+            'v0.2 minimal scope',
+          ),
+        );
+        continue;
+      }
+      final element = parameter.declaredFragment?.element;
+      if (element is! FieldFormalParameterElement || element.field == null) {
+        errors.add(
+          _error(
+            result,
+            parameter.offset,
+            'class "$className" constructor parameter '
+            '"this.${parameter.name.lexeme}" does not match a declared '
+            'field',
+          ),
+        );
+        continue;
+      }
+      if (!_isSupportedType(element.type)) {
+        errors.add(
+          _error(
+            result,
+            parameter.offset,
+            'class "$className" constructor parameter '
+            '"this.${parameter.name.lexeme}" has type '
+            '"${element.type.getDisplayString()}", but only '
+            '$_supportedTypesLabel are supported',
+          ),
+        );
+      }
+      continue;
+    }
+    if (parameter is SimpleFormalParameter) {
+      if (parameter.type?.question != null) {
+        errors.add(
+          _error(
+            result,
+            parameter.offset,
+            'class "$className" constructor parameter '
+            '"${parameter.name?.lexeme ?? '?'}" must not be nullable ("T?") '
+            'in v0.2 minimal scope',
+          ),
+        );
+        continue;
+      }
+      final paramType = parameter.declaredFragment?.element.type;
+      if (!_isSupportedType(paramType)) {
+        errors.add(
+          _error(
+            result,
+            parameter.offset,
+            'class "$className" constructor parameter '
+            '"${parameter.name?.lexeme ?? '?'}" has type '
+            '"${paramType?.getDisplayString() ?? '?'}", but only '
+            '$_supportedTypesLabel are supported',
+          ),
+        );
+      }
+      continue;
+    }
+    errors.add(
+      _error(
+        result,
+        parameter.offset,
+        'class "$className" constructor parameter '
+        '"${parameter.name?.lexeme ?? '?'}" must be a "this.field" or plain '
+        'positional parameter in v0.2 minimal scope (no named, optional, or '
+        'default-valued parameters)',
+      ),
+    );
+  }
+
+  final body = declaration.body;
+  if (body is BlockFunctionBody) {
+    for (final statement in body.block.statements) {
+      errors.addAll(_checkStatement(result, statement, insideLoop: false));
+    }
+  } else if (body is! EmptyFunctionBody) {
+    errors.add(
+      _error(
+        result,
+        body.offset,
+        'class "$className" constructor must have a block body { ... } or '
+        'no body (";") in v0.2 minimal scope',
+      ),
+    );
+  }
+
+  return errors;
+}
+
+/// A non-`static`, non-getter/setter/operator instance method — the class
+/// counterpart of [_checkFunctionDeclaration], with the same return-type/
+/// parameter/body rules (only positional parameters, a block or expression
+/// body).
+List<UnsupportedSyntaxError> _checkMethodDeclaration(
+  ResolvedUnitResult result,
+  String className,
+  MethodDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  final name = declaration.name.lexeme;
+  final label = 'class "$className" method "$name"';
+
+  if (declaration.isStatic ||
+      declaration.isAbstract ||
+      declaration.isGetter ||
+      declaration.isSetter ||
+      declaration.isOperator ||
+      declaration.externalKeyword != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        '$label must be a plain instance method in v0.2 minimal scope (no '
+        'static/abstract/getter/setter/operator/external)',
+      ),
+    );
+    return errors;
+  }
+  if (declaration.typeParameters != null) {
+    errors.add(
+      _error(
+        result,
+        declaration.offset,
+        '$label must not have type parameters in v0.2 minimal scope',
+      ),
+    );
+  }
+
+  final returnTypeAnnotation = declaration.returnType;
+  if (returnTypeAnnotation?.question != null) {
+    errors.add(
+      _error(
+        result,
+        returnTypeAnnotation!.offset,
+        '$label return type must not be nullable ("T?") in v0.2 minimal '
+        'scope',
+      ),
+    );
+  }
+  final returnType = returnTypeAnnotation?.type;
+  final isVoidReturn = returnType == null || returnType is VoidType;
+  if (!isVoidReturn && !_isSupportedType(returnType)) {
+    errors.add(
+      _error(
+        result,
+        returnTypeAnnotation?.offset ?? declaration.offset,
+        '$label has return type "${returnType.getDisplayString()}", but '
+        'only void or $_supportedTypesLabel are supported',
+      ),
+    );
+  }
+
+  for (final parameter
+      in declaration.parameters?.parameters ?? const <FormalParameter>[]) {
+    if (parameter is! SimpleFormalParameter) {
+      errors.add(
+        _error(
+          result,
+          parameter.offset,
+          '$label parameter "${parameter.name?.lexeme ?? '?'}" must be a '
+          'plain positional parameter in v0.2 minimal scope (no named, '
+          'optional, or default-valued parameters)',
+        ),
+      );
+      continue;
+    }
+    if (parameter.type?.question != null) {
+      errors.add(
+        _error(
+          result,
+          parameter.offset,
+          '$label parameter "${parameter.name?.lexeme ?? '?'}" must not be '
+          'nullable ("T?") in v0.2 minimal scope',
+        ),
+      );
+      continue;
+    }
+    final paramType = parameter.declaredFragment?.element.type;
+    if (!_isSupportedType(paramType)) {
+      errors.add(
+        _error(
+          result,
+          parameter.offset,
+          '$label parameter "${parameter.name?.lexeme ?? '?'}" has type '
+          '"${paramType?.getDisplayString() ?? '?'}", but only '
+          '$_supportedTypesLabel are supported',
+        ),
+      );
+    }
+  }
+
+  final body = declaration.body;
+  if (body is ExpressionFunctionBody) {
+    if (isVoidReturn) {
+      errors.addAll(_checkStatementExpression(result, body.expression));
+    } else {
+      errors.addAll(_checkExpression(result, body.expression));
+    }
+  } else if (body is BlockFunctionBody) {
+    for (final statement in body.block.statements) {
+      errors.addAll(_checkStatement(result, statement, insideLoop: false));
+    }
+  } else {
+    errors.add(
+      _error(
+        result,
+        body.offset,
+        '$label must have a block body { ... } or an expression body '
+        '(=> ...)',
+      ),
+    );
+  }
+
+  return errors;
 }
 
 List<UnsupportedSyntaxError> _checkMainDeclaration(
@@ -910,6 +1369,11 @@ List<UnsupportedSyntaxError> _checkStatementExpression(
       // which also handles reporting bare `=` there as unsupported.
       return _checkListIndexWrite(result, expression);
     }
+    if (expression.writeElement is SetterElement) {
+      // `c.value = v;` / `this.value = v;` / bare `value = v;` (implicit
+      // `this`): a field write, #32 — see [_checkFieldWrite].
+      return _checkFieldWrite(result, expression);
+    }
     return _checkCompoundAssignment(result, expression);
   }
 
@@ -928,9 +1392,11 @@ List<UnsupportedSyntaxError> _checkStatementExpression(
         _checkStringMethod(result, expression) != null ||
         _isLocalFunctionCall(expression) ||
         _bindingOf(expression) != null ||
+        _isUserClassMethodCall(expression) ||
         _describeBindingProblem(expression) != null) {
-      // A conversion, String method, local function call, or binding call
-      // as a statement; a non-void result is discarded.
+      // A conversion, String method, local function call, binding call, or
+      // instance method call (#32) as a statement; a non-void result is
+      // discarded.
       return _checkExpression(result, expression);
     }
   }
@@ -940,8 +1406,9 @@ List<UnsupportedSyntaxError> _checkStatementExpression(
       result,
       expression.offset,
       'expression "${_expressionLabel(expression)}" is not supported in '
-      'v0.1 minimal scope (only x++/x--, x+=.../-=/*=//=, print(...), '
-      'sleep(...), and binding calls)',
+      'v0.1/v0.2 minimal scope (only x++/x--, x+=.../-=/*=//=, field '
+      'writes, print(...), sleep(...), binding calls, and instance method '
+      'calls)',
     ),
   ];
 }
@@ -1033,6 +1500,256 @@ String? _describeBindingProblem(Expression reference) {
   return null;
 }
 
+/// A user class (no inheritance, #32) — a class the user wrote (or a
+/// binding imported), not one built into the Dart SDK (`List`, `Object`,
+/// `Duration`, ..., none of which are ever this shape — `List<int>` has its
+/// own dedicated support, see [_isListOfInt]) and not annotated with
+/// `@GoType`. `docs/mapping.md`, "class (no inheritance)".
+bool _isUserClassType(DartType? type) =>
+    type is InterfaceType &&
+    type.element is ClassElement &&
+    !type.element.library.isInSdk &&
+    !isGoType(type);
+
+/// A call to an instance method of a user class (#32): `c.inc()` (an
+/// external local/field holding an instance), `this.inc()`, or a bare
+/// `inc()` inside another method/constructor of the same class (implicit
+/// `this`) — the class counterpart of [_isLocalFunctionCall]/[_bindingOf].
+/// A non-`external`, non-`static` [MethodElement] can only be a user
+/// class's own method (bindings are always `external`, and `static` class
+/// members are rejected by [_checkMethodDeclaration]), so the callee alone
+/// is enough to recognize this shape — Dart's own resolution already
+/// guarantees the receiver matches, the same way it does for
+/// [_isLocalFunctionCall]. `docs/mapping.md`.
+bool _isUserClassMethodCall(MethodInvocation call) {
+  final callee = call.methodName.element;
+  return callee is MethodElement && !callee.isExternal && !callee.isStatic;
+}
+
+/// Checks an instance method call's receiver (if explicit and not a bare
+/// `this`) and arguments — the class counterpart of [_checkBoundCall].
+List<UnsupportedSyntaxError> _checkInstanceMethodCall(
+  ResolvedUnitResult result,
+  MethodInvocation call,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  final target = call.target;
+  if (target != null && target is! ThisExpression) {
+    errors.addAll(_checkExpression(result, target));
+  }
+  for (final arg in call.argumentList.arguments) {
+    errors.addAll(_checkExpression(result, arg));
+  }
+  return errors;
+}
+
+/// `Counter(0)` — a call to a user class's own (non-`@GoType`) generative
+/// constructor, #32. Maps to `NewCounter(0)` (`docs/mapping.md`). Argument
+/// count/types already matched the constructor's declared parameters by the
+/// time this file type-checked, so only each argument's own shape needs
+/// checking here — the same "trust the analyzer" precedent
+/// [_checkStatement]'s `ReturnStatement` case documents.
+///
+/// Returns `null` (not `[]`) when [creation] isn't this shape, so the
+/// caller falls through to its usual unsupported-expression handling.
+List<UnsupportedSyntaxError>? _checkClassConstruction(
+  ResolvedUnitResult result,
+  InstanceCreationExpression creation,
+) {
+  final element = creation.constructorName.element;
+  if (element is! ConstructorElement) return null;
+  final cls = element.enclosingElement;
+  if (cls is! ClassElement || goTypeOf(cls) != null) return null;
+
+  final errors = <UnsupportedSyntaxError>[];
+  for (final arg in creation.argumentList.arguments) {
+    errors.addAll(_checkExpression(result, arg));
+  }
+  return errors;
+}
+
+/// The field [expression] (`c.value`, `this.value`, or bare `value` with
+/// implicit `this`) refers to, or `null` if [expression] isn't a field
+/// access at all. Mirrors [_checkBuiltinGetter]'s two receiver-ful AST
+/// shapes, plus a bare [SimpleIdentifier] for implicit `this` — Dart only
+/// ever resolves a bare identifier to a field's own (implicit) getter this
+/// way from inside that field's own class, so no additional "which class"
+/// context is needed here, the same reasoning [_isUserClassMethodCall]
+/// relies on. `docs/mapping.md`.
+FieldElement? _fieldAccessOf(Expression expression) {
+  final Element? element;
+  switch (expression) {
+    case SimpleIdentifier():
+      element = expression.element;
+    case PrefixedIdentifier():
+      element = expression.identifier.element;
+    case PropertyAccess():
+      if (expression.target == null) return null;
+      element = expression.propertyName.element;
+    default:
+      return null;
+  }
+  if (element is! GetterElement) return null;
+  final variable = element.variable;
+  if (variable is! FieldElement || variable.isEnumConstant) return null;
+  return variable;
+}
+
+/// Checks a field-access expression's receiver, once [_fieldAccessOf] has
+/// confirmed [expression] is one — the implicit-`this` shape (bare
+/// identifier) and explicit `this.field` need no further check, but
+/// `c.field` needs [target] itself validated the same way any other value
+/// expression is.
+List<UnsupportedSyntaxError>? _checkFieldAccess(
+  ResolvedUnitResult result,
+  Expression expression,
+) {
+  if (_fieldAccessOf(expression) == null) return null;
+  final Expression? target = switch (expression) {
+    SimpleIdentifier() => null,
+    PrefixedIdentifier(:final prefix) => prefix,
+    PropertyAccess(:final target) => target,
+    _ => null,
+  };
+  if (target == null || target is ThisExpression) return const [];
+  return _checkExpression(result, target);
+}
+
+/// A field-write target: bare `value` (implicit `this`), `this.value`, or
+/// `c.value`.
+List<UnsupportedSyntaxError> _checkFieldWriteTarget(
+  ResolvedUnitResult result,
+  Expression target,
+) {
+  if (target is SimpleIdentifier) return const [];
+  if (target is PrefixedIdentifier) return _checkExpression(result, target.prefix);
+  if (target is PropertyAccess) {
+    final inner = target.target;
+    if (inner is ThisExpression) return const [];
+    if (inner != null) return _checkExpression(result, inner);
+  }
+  return [
+    _error(
+      result,
+      target.offset,
+      'field write target "${_expressionLabel(target)}" is not supported in '
+      'v0.2 minimal scope',
+    ),
+  ];
+}
+
+const _fieldAssignmentOperators = {'=', '+=', '-=', '*=', '/=', '%=', '~/='};
+
+/// `c.value = v;` / `this.value = v;` / bare `value = v;` (implicit
+/// `this`), #32. Unlike a local (see [_checkCompoundAssignment]), a field
+/// also accepts plain `=` — reassigning a bare local stays out of scope,
+/// but a field must be assignable to be useful at all (`docs/mapping.md`).
+List<UnsupportedSyntaxError> _checkFieldWrite(
+  ResolvedUnitResult result,
+  AssignmentExpression expression,
+) {
+  final op = expression.operator.lexeme;
+  if (!_fieldAssignmentOperators.contains(op)) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'assignment operator "$op" is not supported on a field in v0.2 '
+        'minimal scope (only =/+=/-=/*=//=/%=/~/=)',
+      ),
+    ];
+  }
+
+  final target = expression.leftHandSide;
+  final targetErrors = _checkFieldWriteTarget(result, target);
+  if (targetErrors.isNotEmpty) return targetErrors;
+
+  final targetType = expression.writeType;
+  if (targetType == null || !_isSupportedType(targetType)) {
+    return [
+      _error(
+        result,
+        target.offset,
+        'field has type "${targetType?.getDisplayString() ?? '?'}", but only '
+        '$_supportedTypesLabel are supported',
+      ),
+    ];
+  }
+
+  if (op != '=') {
+    if (!(targetType.isDartCoreInt || targetType.isDartCoreDouble)) {
+      return [
+        _error(
+          result,
+          target.offset,
+          '"$op" is only supported on int/double fields in v0.2 minimal '
+          'scope, got "${targetType.getDisplayString()}"',
+        ),
+      ];
+    }
+    if (_intOnlyCompoundAssignmentOperators.contains(op) &&
+        !targetType.isDartCoreInt) {
+      return [
+        _error(
+          result,
+          target.offset,
+          '"$op" is only supported on int fields, got '
+          '"${targetType.getDisplayString()}"',
+        ),
+      ];
+    }
+    if (_doubleOnlyCompoundAssignmentOperators.contains(op) &&
+        !targetType.isDartCoreDouble) {
+      return [
+        _error(
+          result,
+          target.offset,
+          '"$op" is only supported on double fields in v0.2 minimal scope, '
+          'got "${targetType.getDisplayString()}"',
+        ),
+      ];
+    }
+  }
+
+  final rhs = expression.rightHandSide;
+  final rhsErrors = _checkExpression(result, rhs);
+  if (rhsErrors.isNotEmpty) return rhsErrors;
+  final rhsType = rhs.staticType;
+  final matches = rhsType != null &&
+      (op == '='
+          ? _fieldAssignable(targetType, rhsType)
+          : (targetType.isDartCoreInt && rhsType.isDartCoreInt) ||
+              (targetType.isDartCoreDouble && rhsType.isDartCoreDouble));
+  if (!matches) {
+    return [
+      _error(
+        result,
+        rhs.offset,
+        '"$op" requires the right-hand side to have the same type as the '
+        'field ("${targetType.getDisplayString()}"), got '
+        '"${rhsType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
+/// Whether a value of type [rhs] may be assigned (via plain `=`) to a field
+/// of type [target] — the same "no implicit conversion" precedent as
+/// everywhere else, extended to `List<int>`/`@GoType`/enum/user-class
+/// identity (matched by declaring element, like [_sameComparableType]).
+bool _fieldAssignable(DartType target, DartType rhs) {
+  if (_sameComparableType(target, rhs)) return true;
+  if (_isListOfInt(target) && _isListOfInt(rhs)) return true;
+  if (target is InterfaceType &&
+      rhs is InterfaceType &&
+      (isGoType(target) || _isUserClassType(target)) &&
+      target.element == rhs.element) {
+    return true;
+  }
+  return false;
+}
+
 /// The Dart types a local, an argument, or a binding result may have. Each
 /// maps onto exactly one Go type (`docs/mapping.md`, "Type mapping table"),
 /// so values of these types are passed to Go verbatim.
@@ -1044,10 +1761,12 @@ bool _isSupportedType(DartType? type) =>
         type.isDartCoreString ||
         _isListOfInt(type) ||
         isGoType(type) ||
-        _isEnumType(type));
+        _isEnumType(type) ||
+        _isUserClassType(type));
 
 const _supportedTypesLabel =
-    'int, double, bool, String, List<int>, enum, and @GoType binding';
+    'int, double, bool, String, List<int>, enum, @GoType binding, and '
+    'user class';
 
 /// A user enum or a `@GoType` binding enum (#31) — see
 /// `_checkEnumDeclaration`.
@@ -1083,6 +1802,8 @@ List<UnsupportedSyntaxError> _checkExpression(
     if (builtinGetter != null) return builtinGetter;
     if (_isUserEnumConstant(expression)) return const [];
     if (_constantBindingOf(expression) != null) return const [];
+    final fieldAccess = _checkFieldAccess(result, expression);
+    if (fieldAccess != null) return fieldAccess;
     final enumProblem = _describeEnumConstantProblem(expression);
     if (enumProblem != null) {
       return [_error(result, expression.offset, enumProblem)];
@@ -1095,6 +1816,8 @@ List<UnsupportedSyntaxError> _checkExpression(
   if (expression is PropertyAccess) {
     final builtinGetter = _checkBuiltinGetter(result, expression);
     if (builtinGetter != null) return builtinGetter;
+    final fieldAccess = _checkFieldAccess(result, expression);
+    if (fieldAccess != null) return fieldAccess;
   }
   if (expression is MethodInvocation) {
     final conversion = _checkNumConversion(result, expression);
@@ -1104,6 +1827,9 @@ List<UnsupportedSyntaxError> _checkExpression(
     if (_isLocalFunctionCall(expression) || _bindingOf(expression) != null) {
       return _checkBoundCall(result, expression);
     }
+    if (_isUserClassMethodCall(expression)) {
+      return _checkInstanceMethodCall(result, expression);
+    }
     final bindingProblem = _describeBindingProblem(expression);
     if (bindingProblem != null) {
       return [_error(result, expression.offset, bindingProblem)];
@@ -1112,6 +1838,8 @@ List<UnsupportedSyntaxError> _checkExpression(
   if (expression is InstanceCreationExpression) {
     final fromCharCodes = _checkFromCharCodes(result, expression);
     if (fromCharCodes != null) return fromCharCodes;
+    final classConstruction = _checkClassConstruction(result, expression);
+    if (classConstruction != null) return classConstruction;
   }
   if (expression is ListLiteral) {
     return _checkListLiteral(result, expression);
@@ -1333,6 +2061,13 @@ bool _sameComparableType(DartType a, DartType b) =>
     (a.isDartCoreString && b.isDartCoreString) ||
     (_isUserEnumType(a) &&
         _isUserEnumType(b) &&
+        (a as InterfaceType).element == (b as InterfaceType).element) ||
+    // `c1 == c2` on user-class instances (#32): Dart's default `==` is
+    // identity, exactly like Go's `==` on the `*Foo` pointers instances are
+    // always represented as, so this maps onto Go's own `==`/`!=` with no
+    // extra work from the generator (`docs/mapping.md`).
+    (_isUserClassType(a) &&
+        _isUserClassType(b) &&
         (a as InterfaceType).element == (b as InterfaceType).element);
 
 /// The `@GoName` binding behind a reference to a Go constant or package

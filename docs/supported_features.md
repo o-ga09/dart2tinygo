@@ -44,7 +44,7 @@ See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 
 | Feature | Status |
 | --- | --- |
-| Classes (fields, constructors, methods; no inheritance) | Not implemented |
+| Classes (fields, constructors, methods; no inheritance) | Implemented — `class Foo { ... }` maps to a Go `struct` + `NewFoo(...)` + pointer-receiver methods (instances are always `*Foo`); one plain generative constructor (`this.field`/plain positional parameters, no initializer list), fields of a supported type (no declaration-site initializer — set via the constructor), instance methods (same rules as a top-level function), field access and `this`/implicit-`this`, instance method calls, and `==`/`!=` (identity, like Go's own `==` on the pointer). `extends`/`implements`/`with`, class modifiers (`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`), generics, `static`, getters/setters/operators, nullable (`T?`) types, and named/const/factory constructors are rejected by the checker — see [`mapping.md`](./mapping.md#class-no-inheritance-decided-2026-09-22-implemented) |
 | `List<T>` → Go slice | Not implemented |
 | Bitwise operations, `int.toSigned(n)` | Not implemented |
 

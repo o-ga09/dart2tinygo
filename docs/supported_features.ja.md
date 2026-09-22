@@ -43,7 +43,7 @@
 
 | 機能 | 状態 |
 | --- | --- |
-| クラス（フィールド・コンストラクタ・メソッド、継承なし） | 未実装 |
+| クラス（フィールド・コンストラクタ・メソッド、継承なし） | 実装済み — `class Foo { ... }` は Go の `struct` + `NewFoo(...)` + ポインタレシーバのメソッドにマップされる（インスタンスは常に `*Foo`）。1 つの素の generative constructor（`this.field`／通常の位置引数のみ、initializer list 不可）、対応済みの型を持つフィールド（宣言時の初期化子は不可 — コンストラクタで設定する）、インスタンスメソッド（トップレベル関数と同じ規則）、フィールドアクセスと `this`／暗黙の `this`、インスタンスメソッド呼び出し、`==`/`!=`（同一性比較。Go 自身のポインタ `==` と同じ）に対応。`extends`/`implements`/`with`、クラス修飾子（`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`）、ジェネリクス、`static`、getter/setter/演算子オーバーロード、nullable（`T?`）型、名前付き／const／factory コンストラクタは checker が拒否する — 詳細は [`mapping.ja.md`](./mapping.ja.md) の「クラス（継承なし）」参照 |
 | `List<T>` → Go スライス | 未実装 |
 | ビット演算、`int.toSigned(n)` | 未実装 |
 

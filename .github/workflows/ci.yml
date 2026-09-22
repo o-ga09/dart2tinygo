@@ -110,6 +110,15 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (enum)
         working-directory: /tmp/dart2tinygo-enum-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises a class (no inheritance, #32): fields, a this.x
+      # constructor, methods, field access/writes, instance method calls,
+      # and == identity comparison.
+      - name: dart2tinygo build (class_basic golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/class_basic.dart -o /tmp/dart2tinygo-class-out
+      - name: tinygo build -target=${{ matrix.target }} (class_basic)
+        working-directory: /tmp/dart2tinygo-class-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'

@@ -266,6 +266,60 @@ int representation to index a name table with or compare.
 | `Pin.led` | `tgm.LED` |
 | `high(Pin.led);` | `tgm.High(tgm.LED)` |
 
+## class (no inheritance) (decided 2026-09-22, implemented)
+
+v0.2, #32: `class Foo { ... }` becomes a Go `struct` + `func NewFoo(...) *Foo`
++ pointer-receiver methods. Instances are always `*Foo` — Dart's reference
+semantics, and `==`/`!=` on two instances is identity (Dart's default),
+which is exactly what Go's own `==` on the `*Foo` pointer already does, so
+no extra code is needed to reproduce it. No inheritance:
+`extends`/`implements`/`with` and every class modifier (`abstract`/`base`/
+`final`/`interface`/`mixin`/`sealed`) are rejected by the checker, as are
+generics, `static` members, getters/setters/operator overrides, and
+nullable (`T?`) field/parameter/return types.
+
+A field declares one of the supported types and must not have a
+declaration-site initializer — every field is set by the constructor
+instead (see below), so there's exactly one place per class to read to see
+how a value gets there. Exactly one constructor is required (no inheritance
+means there is no implicit default to fall back on): unnamed, not `const`/
+`factory`/`external`, and with no initializer list (`: field = expr, ...`;
+Dart also requires every non-nullable field with no declaration default to
+be initialized *before* the constructor body runs, so in practice every
+field ends up needing a `this.field` parameter — a body statement can only
+ever *reassign* an already-`this.field`-initialized field, not perform the
+initial assignment). Each parameter is a `this.field` (maps straight onto a
+struct-literal field) or a plain positional parameter (for use in the
+body); named/optional/default-valued parameters aren't supported, the same
+restriction as a top-level function's. A constructor/method body is checked
+and generated exactly like a top-level function's, plus field access/writes
+and instance method calls.
+
+Field access — implicit `this` (`value`), explicit `this.value`, or
+`c.value` on any local/field holding an instance — all map onto the same
+Go form, `<receiver>.<field>`: `this`/implicit `this` become the enclosing
+method's own receiver variable (the class's own name, first letter
+lowercased, e.g. `Counter` → `c`). An instance method call is the same
+story: `c.inc()` / `this.inc()` / bare `inc()` (implicit `this`) all become
+`<receiver>.inc(...)`. This reuses the same call-emission code path a
+`@GoType` binding method call goes through, just keyed off a plain
+(non-`external`) `MethodElement` instead of a `@GoName` binding.
+
+| Dart | Go |
+| --- | --- |
+| `class Counter { int value; Counter(this.value); void inc() { value++; } }` | `type Counter struct { value int }` + `func NewCounter(value int) *Counter { return &Counter{value: value} }` + `func (c *Counter) inc() { c.value++ }` |
+| `Counter(0)` | `NewCounter(0)` |
+| `c.value` / `this.value` (inside a method) / bare `value` (inside a method) | `c.value` / `c.value` / `c.value` — always qualified with the receiver |
+| `c.value = 5;` / `c.value += 1;` | `c.value = 5` / `c.value += 1` — unlike a local, a field also accepts plain `=` |
+| `c.inc();` | `c.inc()` |
+| `c1 == c2` | `c1 == c2` — pointer identity, same as Dart's default `==` |
+| a constructor with a non-empty body (`this.field` params only initialize; the body can reassign) | `<recv> := &Foo{...this.field inits...}` then the body's statements, then `return <recv>` — a trivial `this.field`-only constructor with no body skips the intermediate local and returns the struct literal directly |
+
+Out of scope for v0.2: inheritance/mixins/interfaces, generics, an
+initializer list (`: field = expr, ...`) for a derived field value (use a
+plain positional constructor parameter and a body statement instead, or a
+method), and operator overloading.
+
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
@@ -278,7 +332,7 @@ int representation to index a name table with or compare.
 | `List<int>` | `[]byte` — see "List<int>" below | impl. |
 | `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
 | `enum` | user enum: `type E int` + `const ( ... iota )` + a name table, `.index`/`.name`/`==`/`switch` — see "enum" above; `@GoType`/`@GoName` binding enum: the constant's `@GoName` value, verbatim | impl. |
-| class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
+| class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) — see "class (no inheritance)" above | impl. |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker — see "Top-level functions" above | impl. |
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
 | `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |

@@ -1697,4 +1697,294 @@ int add(int a, int b) => a + b;
       isTrue,
     );
   });
+
+  group('class (#32)', () {
+    test(
+        'accepts fields, a this.x constructor, methods, field access, and '
+        'instance method calls', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+
+  Counter(this.value);
+
+  void inc() {
+    value++;
+  }
+
+  int addTo(int value) => this.value + value;
+}
+
+void main() {
+  final c = Counter(0);
+  c.inc();
+  print('\${c.value}');
+  print('\${c.addTo(3)}');
+  c.value = 10;
+  c.value += 5;
+  var same = c == c;
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a constructor body that reassigns a this.x field',
+        () async {
+      final errors = await checkSource('''
+class Rect {
+  int width;
+  int height;
+
+  Rect(this.width, this.height) {
+    if (width < 0) {
+      width = 0;
+    }
+  }
+
+  int area() => width * height;
+
+  void grow() {
+    width++;
+    bumpHeight();
+  }
+
+  void bumpHeight() {
+    height += 1;
+  }
+}
+
+void main() {
+  final r = Rect(3, 4);
+  print('\${r.area()}');
+  r.grow();
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports extends/implements/with', () async {
+      final errors = await checkSource('''
+class Base {
+  int x;
+  Base(this.x);
+}
+
+class Derived extends Base {
+  Derived(super.x);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('no inheritance')),
+        isTrue,
+      );
+    });
+
+    test('reports an abstract class', () async {
+      final errors = await checkSource('''
+abstract class Shape {
+  int sides;
+  Shape(this.sides);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('class modifier')), isTrue);
+    });
+
+    test('reports a class with type parameters', () async {
+      final errors = await checkSource('''
+class Box<T> {
+  int x;
+  Box(this.x);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('type parameters')),
+        isTrue,
+      );
+    });
+
+    test('reports a static field', () async {
+      final errors = await checkSource('''
+class Counter {
+  static int total = 0;
+  int value;
+  Counter(this.value);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('static')), isTrue);
+    });
+
+    test('reports a static method', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter(this.value);
+  static Counter zero() => Counter(0);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('static')), isTrue);
+    });
+
+    test('reports a getter and a setter', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter(this.value);
+  int get doubled => value * 2;
+  set doubled(int v) {
+    value = v ~/ 2;
+  }
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('getter/setter')),
+        isTrue,
+      );
+    });
+
+    test('reports an operator== override', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter(this.value);
+  @override
+  bool operator ==(Object other) =>
+      other is Counter && other.value == value;
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('operator')), isTrue);
+    });
+
+    test('reports a nullable field type', () async {
+      final errors = await checkSource('''
+class Counter {
+  int? value;
+  Counter(this.value);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('nullable')), isTrue);
+    });
+
+    test('reports throw as unsupported', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter(this.value);
+  void checked() {
+    if (value < 0) {
+      throw Exception('negative');
+    }
+  }
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+    });
+
+    test('reports zero constructors', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value = 0;
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('exactly one constructor')),
+        isTrue,
+      );
+    });
+
+    test('reports more than one constructor', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter(this.value);
+  Counter.zero() : value = 0;
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('exactly one constructor')),
+        isTrue,
+      );
+    });
+
+    test('reports a named constructor', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value;
+  Counter.named(this.value);
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.any((e) => e.reason.contains('unnamed')), isTrue);
+    });
+
+    test('reports a const constructor and an initializer list', () async {
+      final errors = await checkSource('''
+class Point {
+  final int x;
+  final int y;
+  const Point(this.x) : y = 0;
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('const/factory/external')),
+        isTrue,
+      );
+      expect(
+        errors.any((e) => e.reason.contains('initializer list')),
+        isTrue,
+      );
+    });
+
+    test('reports a field with a declaration-site initializer', () async {
+      final errors = await checkSource('''
+class Counter {
+  int value = 0;
+  Counter();
+}
+
+void main() {}
+''');
+      expect(errors, isNotEmpty);
+      expect(
+        errors.any((e) => e.reason.contains('must not have an initializer')),
+        isTrue,
+      );
+    });
+  });
 }
