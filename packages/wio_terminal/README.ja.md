@@ -25,6 +25,9 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `LightSensor.read()` / `.readPercent()` | `(*LightSensor).Read()` / `.ReadPercent()` | 生値（0〜65535）または正規化値（0〜100）の明るさ |
 | `newMicrophone()` | `wio.NewMicrophone()` | マイク（`machine.WIO_MIC`）をアナログ入力として設定 |
 | `Microphone.read()` / `.readLevel(windowMs)` | `(*Microphone).Read()` / `.ReadLevel(windowMs)` | 瞬時サンプル、またはサンプリング窓での振幅（peak-to-peak） |
+| `newAccelerometer()` | `wio.NewAccelerometer()` | I2C1 + LIS3DHTR（アドレス0x18、±2G）を設定 |
+| `Accelerometer.update()` | `(*Accelerometer).Update()` | 3軸をまとめて読み取りキャッシュする |
+| `.x()`/`.y()`/`.z()`、`.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`、`.XMilliG()`/... | キャッシュ値（G またはミリG） |
 
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 

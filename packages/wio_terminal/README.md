@@ -25,6 +25,9 @@ Currently provided:
 | `LightSensor.read()` / `.readPercent()` | `(*LightSensor).Read()` / `.ReadPercent()` | Raw (0-65535) or normalized (0-100) brightness |
 | `newMicrophone()` | `wio.NewMicrophone()` | Configure the microphone (`machine.WIO_MIC`) as an analog input |
 | `Microphone.read()` / `.readLevel(windowMs)` | `(*Microphone).Read()` / `.ReadLevel(windowMs)` | Instantaneous sample, or peak-to-peak amplitude over a sampling window |
+| `newAccelerometer()` | `wio.NewAccelerometer()` | Configure I2C1 + the LIS3DHTR (address 0x18, +-2G) |
+| `Accelerometer.update()` | `(*Accelerometer).Update()` | Read and cache all three axes |
+| `.x()`/`.y()`/`.z()`, `.xMilliG()`/`.yMilliG()`/`.zMilliG()` | `.X()`/`.Y()`/`.Z()`, `.XMilliG()`/... | The cached reading, in G or milli-G |
 
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 

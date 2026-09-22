@@ -152,3 +152,46 @@ class Microphone {
   @GoName('ReadLevel')
   external int readLevel(int windowMs);
 }
+
+/// Configures I2C1 and the built-in 3-axis accelerometer LIS3DHTR (address
+/// 0x18) at a +-2G range, and returns a handle to read it.
+@GoName('wio.NewAccelerometer')
+external Accelerometer newAccelerometer();
+
+/// The Wio Terminal's built-in 3-axis accelerometer. Obtain one with
+/// [newAccelerometer].
+@GoType('*wio.Accelerometer')
+class Accelerometer {
+  Accelerometer._();
+
+  /// Reads all three axes at once and caches the result for [x]/[y]/[z] and
+  /// [xMilliG]/[yMilliG]/[zMilliG]. A failed read leaves the previous
+  /// cached values in place (the underlying Go error has no annotation to
+  /// surface it).
+  @GoName('Update')
+  external void update();
+
+  /// The most recent [update] reading, in G.
+  @GoName('X')
+  external double x();
+
+  /// The most recent [update] reading, in G.
+  @GoName('Y')
+  external double y();
+
+  /// The most recent [update] reading, in G.
+  @GoName('Z')
+  external double z();
+
+  /// The most recent [update] reading, in milli-G.
+  @GoName('XMilliG')
+  external int xMilliG();
+
+  /// The most recent [update] reading, in milli-G.
+  @GoName('YMilliG')
+  external int yMilliG();
+
+  /// The most recent [update] reading, in milli-G.
+  @GoName('ZMilliG')
+  external int zMilliG();
+}
