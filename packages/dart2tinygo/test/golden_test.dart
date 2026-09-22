@@ -40,7 +40,7 @@ void main() {
             '${errors.join('\n')}',
       );
 
-      final generated = generateGoFile(result).source;
+      final generated = (await generateGoFile(result)).source;
       final formatted = await _gofmt(generated);
 
       if (updateGoldens) {

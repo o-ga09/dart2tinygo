@@ -358,7 +358,12 @@ List<UnsupportedSyntaxError> _checkUpdaterExpression(
   ];
 }
 
-const _compoundAssignmentOperators = {'+=', '-=', '*=', '/='};
+const _compoundAssignmentOperators = {'+=', '-=', '*=', '/=', '%=', '~/='};
+
+/// `%=`/`~/=` only make sense on `int` in v0.1 minimal scope: `%=` goes
+/// through `dartrt.Mod` (see [_arithmeticOperators]), which is `int`-only,
+/// and Dart's floating-point `~/` isn't implemented.
+const _intOnlyCompoundAssignmentOperators = {'%=', '~/='};
 
 List<UnsupportedSyntaxError> _checkCompoundAssignment(
   ResolvedUnitResult result,
@@ -371,7 +376,7 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
         result,
         expression.offset,
         'assignment operator "$op" is not supported in v0.1 minimal scope '
-        '(only +=/-=/*=//=)',
+        '(only +=/-=/*=//=/%=/~/=)',
       ),
     ];
   }
@@ -396,6 +401,17 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
         target.offset,
         '"$op" is only supported on int/double locals, got '
         '"${targetType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+  if (_intOnlyCompoundAssignmentOperators.contains(op) &&
+      !targetType.isDartCoreInt) {
+    return [
+      _error(
+        result,
+        target.offset,
+        '"$op" is only supported on int locals, got '
+        '"${targetType.getDisplayString()}"',
       ),
     ];
   }
@@ -655,14 +671,31 @@ List<UnsupportedSyntaxError> _checkExpression(
     }
     return const [];
   }
+  if (expression is PrefixExpression && expression.operator.lexeme == '-') {
+    final operand = expression.operand;
+    final operandErrors = _checkExpression(result, operand);
+    if (operandErrors.isNotEmpty) return operandErrors;
+    final type = operand.staticType;
+    if (type == null || !type.isDartCoreInt) {
+      return [
+        _error(
+          result,
+          operand.offset,
+          'unary "-" operand has type "${type?.getDisplayString() ?? '?'}", '
+          'but v0.1 minimal scope only supports int',
+        ),
+      ];
+    }
+    return const [];
+  }
   return [
     _error(
       result,
       expression.offset,
       'expression "${_expressionLabel(expression)}" is not supported in v0.1 '
       'minimal scope (only int/double/bool/String literals, local variables, '
-      'binding calls, Go constant references, comparisons, and logical '
-      'operators)',
+      'binding calls, Go constant references, comparisons, logical operators, '
+      'and int arithmetic)',
     ),
   ];
 }
@@ -671,10 +704,17 @@ const _comparisonOperators = {'<', '<=', '>', '>='};
 const _equalityOperators = {'==', '!='};
 const _logicalOperators = {'&&', '||'};
 
-/// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`) and logical (`&&`/`||`) binary
-/// operators map 1:1 onto Go, which uses the same tokens
-/// (`docs/mapping.md`). Every other operator (arithmetic, bitwise, string
-/// concatenation `+`) is out of v0.1 minimal scope.
+/// `+`/`-`/`*`/`~/`/`%`, `int` only for now — `double` arithmetic is #9's
+/// job. `~/` maps to Go's `/` (both truncate toward zero); `%` goes through
+/// `dartrt.Mod` because Dart's `%` is never negative, unlike Go's
+/// (`docs/mapping.md`, "Numeric semantics").
+const _arithmeticOperators = {'+', '-', '*', '~/', '%'};
+
+/// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`), and `int`
+/// arithmetic (`+`/`-`/`*`/`~/`/`%`) binary operators map 1:1 onto Go (or,
+/// for `%`, onto `dartrt.Mod`), which uses the same tokens
+/// (`docs/mapping.md`). Every other operator (bitwise, `String`
+/// concatenation `+`, `double` arithmetic) is out of v0.1 minimal scope.
 ///
 /// To keep the generator cast-free, both operands of a comparison or
 /// equality must have the *same* supported type — no implicit `int`/`double`
@@ -688,13 +728,15 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
   final isComparison = _comparisonOperators.contains(op);
   final isEquality = _equalityOperators.contains(op);
   final isLogical = _logicalOperators.contains(op);
-  if (!isComparison && !isEquality && !isLogical) {
+  final isArithmetic = _arithmeticOperators.contains(op);
+  if (!isComparison && !isEquality && !isLogical && !isArithmetic) {
     return [
       _error(
         result,
         expression.offset,
         'binary operator "$op" is not supported in v0.1 minimal scope (only '
-        'comparisons ==/!=/</<=/>/>= and logical &&/||)',
+        'comparisons ==/!=/</<=/>/>=, logical &&/||, and int arithmetic '
+        '+/-/*/~///%)',
       ),
     ];
   }
@@ -719,6 +761,22 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
           expression.offset,
           '"$op" requires bool operands, got '
           '"${leftType?.getDisplayString() ?? '?'}" and '
+          '"${rightType?.getDisplayString() ?? '?'}"',
+        ),
+      );
+    }
+    return errors;
+  }
+
+  if (isArithmetic) {
+    if (!(leftType?.isDartCoreInt ?? false) ||
+        !(rightType?.isDartCoreInt ?? false)) {
+      errors.add(
+        _error(
+          result,
+          expression.offset,
+          '"$op" is only supported for int operands in v0.1 minimal scope, '
+          'got "${leftType?.getDisplayString() ?? '?'}" and '
           '"${rightType?.getDisplayString() ?? '?'}"',
         ),
       );

@@ -117,8 +117,15 @@ DartObject? _annotationValue(Metadata metadata, String className) {
 /// a binding that ships its Go runtime in-tree gets a `replace` directive so
 /// examples build straight from a checkout, and one that doesn't is left to
 /// `go mod tidy` to fetch normally.
-GoLocalModule? _findLocalModule(LibraryElement library) {
-  final sourcePath = library.firstFragment.source.fullName;
+GoLocalModule? _findLocalModule(LibraryElement library) =>
+    findLocalModuleNear(library.firstFragment.source.fullName);
+
+/// Walks up from [sourcePath] to the nearest `pubspec.yaml`, and returns the
+/// `go/go.mod` module declared next to it, if any. Shared by [_findLocalModule]
+/// (a binding library) and the core's own `dartrt` runtime
+/// (`packages/dart2tinygo/go/`, see `docs/mapping.md` "Common Go runtime"),
+/// which is looked up the same way even though it isn't a binding.
+GoLocalModule? findLocalModuleNear(String sourcePath) {
   var dir = p.dirname(sourcePath);
   while (true) {
     if (File(p.join(dir, 'pubspec.yaml')).existsSync()) {

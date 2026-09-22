@@ -248,13 +248,128 @@ void main() {
     test('reports unsupported binary operators', () async {
       final errors = await checkSource('''
 void main() {
-  var sum = 1 + 2;
+  var sum = 1 & 2;
   if (sum > 0) { print('hi'); }
 }
 ''');
       expect(errors, hasLength(1));
       expect(errors.single.line, 2);
-      expect(errors.single.reason, contains('"+"'));
+      expect(errors.single.reason, contains('"&"'));
+    });
+  });
+
+  group('int arithmetic', () {
+    test('accepts + - * ~/ % on matching int operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = -5;
+  var b = a % 3;
+  var c = a ~/ 3;
+  var sum = a + b;
+  var diff = a - b;
+  var prod = a * b;
+  print('\$sum \$diff \$prod \$c');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts nested and parenthesized arithmetic', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var b = 2;
+  var c = 3;
+  var result = (a + b) * c - a % b;
+  print('\$result');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts arithmetic inside a comparison', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 5;
+  if (a % 2 == 0) {
+    print('even');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts unary minus on an int local', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 5;
+  var b = -a;
+  print('\$b');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts += -= *= /= %= ~/= on int locals', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 10;
+  i += 1;
+  i -= 1;
+  i *= 2;
+  i ~/= 2;
+  i %= 3;
+  print('\$i');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports arithmetic on mismatched types', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var x = 1.5;
+  if (a + x > 0) {
+    print('hi');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
+    });
+
+    test('reports arithmetic on String operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 'a' + 'b';
+  print(s);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
+    });
+
+    test('reports unary minus on a non-int operand', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  var y = -x;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
+    });
+
+    test('reports %= and ~/= on a double local', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  x %= 0.5;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
     });
   });
 
@@ -504,11 +619,11 @@ void main() {
       final errors = await checkSource('''
 void main() {
   var i = 0;
-  i %= 2;
+  i &= 2;
 }
 ''');
       expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('"%="'));
+      expect(errors.single.reason, contains('"&="'));
     });
   });
 
@@ -615,13 +730,25 @@ import 'package:test_binding/test_binding.dart';
 void main() {
   final widget = newWidget();
   widget.show(1, 2, 'a' + 'b');
-  beep(1 + 2);
+  beep(1 & 2);
 }
 ''');
       expect(errors, hasLength(2));
       expect(errors[0].line, 5);
       expect(errors[0].reason, contains('"+"'));
       expect(errors[1].line, 6);
+      expect(errors[1].reason, contains('"&"'));
+    });
+
+    test('accepts int arithmetic as a binding-call argument', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  beep(1 + 2 * 3);
+}
+''');
+      expect(errors, isEmpty);
     });
 
     test('reports binding methods called on non-local receivers', () async {

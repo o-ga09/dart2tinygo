@@ -54,11 +54,22 @@ jobs:
           tinygo-version: "0.42.0"
       - name: Install dependencies
         run: dart pub get
+      - name: go test packages/dart2tinygo/go (dartrt)
+        working-directory: packages/dart2tinygo/go
+        run: go test ./...
       - name: dart2tinygo build (v0.1 minimal golden case)
         working-directory: packages/dart2tinygo
         run: dart run bin/dart2tinygo.dart build test/golden/minimal_blink.dart -o /tmp/dart2tinygo-out
       - name: tinygo build -target=${{ matrix.target }}
         working-directory: /tmp/dart2tinygo-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises the dartrt runtime (packages/dart2tinygo/go/): int
+      # arithmetic, `~/`, `%`.
+      - name: dart2tinygo build (int_arithmetic golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/int_arithmetic.dart -o /tmp/dart2tinygo-arith-out
+      - name: tinygo build -target=${{ matrix.target }} (int_arithmetic)
+        working-directory: /tmp/dart2tinygo-arith-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)

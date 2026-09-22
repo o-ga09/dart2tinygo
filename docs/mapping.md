@@ -19,6 +19,12 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 | `break` / `continue` | `break` / `continue` — unlabeled only |
 | `x++` / `x--` | `x++` / `x--` (int only) |
 | `x += y` / `x -= y` / `x *= y` / `x /= y` | same tokens in Go; `x`/`y` must have the same type, `int` or `double` |
+| `a + b` / `a - b` / `a * b` | same tokens in Go; `int` only (`double` arithmetic is #9) |
+| `a ~/ b` | `a / b` — Go's `int` division already truncates toward zero, like Dart's `~/` |
+| `a % b` | `dartrt.Mod(a, b)` — Dart's `%` is never negative (`-5 % 3 == 1`); Go's `%` keeps the dividend's sign (`-5 % 3 == -2`), so a plain `%` would be wrong for negative operands |
+| `-a` (unary) | `-a`; `int` only |
+| `x ~/= y` | `x /= y` |
+| `x %= y` | `x = dartrt.Mod(x, y)` — same reasoning as `%`; also valid as a `for`-loop updater |
 | `print(<string>)` | `println(<string>)` — not `fmt.Println`, to avoid pulling in `fmt` on TinyGo |
 | `print('... $x ...')` | string concatenation: `"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)` (also supports `seconds`/`minutes`/`hours`/`days`/`microseconds`, summed when combined) |
@@ -49,7 +55,7 @@ Generated `go.mod`: for each binding whose Dart package ships `go/go.mod`,
 `require <module> v0.0.0` plus `replace <module> => <absolute local path>`,
 followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 
-## Numeric semantics (decided 2026-09-22, not yet implemented beyond `int` literals)
+## Numeric semantics (decided 2026-09-22; `int` implemented, `double` arithmetic is #9)
 
 - **`int` → Go `int`** (platform width: 32-bit on 32-bit MCUs such as the
   SAMD51, wrapping at 32 bits). Rationale: Dart already accepts
@@ -63,12 +69,15 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 - Integer literals stay untyped Go constants (`x := 0`).
 - `~/` → Go `/` (both truncate toward zero). `%` differs (Dart `-5 % 3 == 1`,
   Go `-2`) and goes through the runtime helper below.
+- `int` arithmetic (`+`/`-`/`*`/`~/`/`%`, unary `-`, and the compound forms
+  `+=`/`-=`/`*=`/`/=`/`~/=`/`%=`) is implemented; both operands must be
+  `int` (no implicit promotion), see the v0.1 table above.
 
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
 | --- | --- | --- |
-| `int` | `int` | impl. (literals/locals/binding results) |
+| `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment) |
 | `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; no arithmetic or interpolation yet) |
 | `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
 | `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | impl. (literals/locals/binding results; no operations yet) |
@@ -84,17 +93,21 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |
 | inheritance, mixins, generics, `T?`, `throw`/exceptions, `async` | rejected by the checker | decided (future) |
 
-## Common Go runtime (`dartrt`, decided 2026-09-22, not yet implemented)
+## Common Go runtime (`dartrt`, decided 2026-09-22, implemented)
 
 Semantics that cannot be expressed as an inline Go expression go through a
 small board-agnostic Go module at `packages/dart2tinygo/go/` (module
 `github.com/o-ga09/dart2tinygo/packages/dart2tinygo/go`, imported as
 `dartrt`), shipped and wired up exactly like a binding's `go/` (see
-[`writing_bindings.md`](./writing_bindings.md)). It is imported only when
-used. Initial contents: `FormatDouble` (Dart prints `1.0`, Go's
-`strconv.FormatFloat` prints `1`), `Mod` (Dart `%`). This is language
-semantics, not board knowledge, so it does not violate the core's
-no-board-code rule.
+[`writing_bindings.md`](./writing_bindings.md)): the generator locates it via
+`package:dart2tinygo`'s own package config (`Isolate.resolvePackageUri`),
+since it isn't declared by any `@GoImport` — nothing in the entry point's
+package graph otherwise points back at the transpiler's own package. It is
+imported only when used. Contents: `Mod` (Dart `%`, used by `%` and `%=`,
+implemented); `FormatDouble` (Dart prints `1.0`, Go's
+`strconv.FormatFloat` prints `1`; implemented in the runtime, wired into
+string interpolation by #9). This is language semantics, not board
+knowledge, so it does not violate the core's no-board-code rule.
 
 ## String interpolation (implemented for `int` / `bool` / `String`, decided for `double`)
 

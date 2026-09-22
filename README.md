@@ -70,6 +70,16 @@ declarations annotated with `@GoImport` / `@GoName` / `@GoType`; the
 transpiler core knows nothing about the board. See
 [Writing bindings](./docs/writing_bindings.md).
 
+## Numeric semantics
+
+`int` maps to Go's `int`, which is **platform-width**: 64-bit on a desktop,
+but 32-bit on a 32-bit microcontroller (e.g. the SAMD51 in the Wio
+Terminal), wrapping at 32 bits on overflow. If you've shared code between
+Flutter mobile/desktop and Flutter Web, this is the same trade-off dart2js
+users already know — its bitwise operators are 32-bit for the same kind of
+platform reason. See the "Numeric semantics" section of
+[`docs/mapping.md`](./docs/mapping.md) for the full rationale.
+
 ## Repository layout
 
 ```

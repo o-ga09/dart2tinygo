@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
@@ -25,6 +27,8 @@ class GeneratedGoFile {
 /// Everything the generated file needs from outside itself, collected while
 /// walking `main()`.
 class GoDeps {
+  GoDeps({this.dartrtModule});
+
   /// Go imports keyed by import path. The value is the alias (`null` for
   /// stdlib packages and for bindings that rely on the package's own name).
   final imports = <String, String?>{};
@@ -32,17 +36,24 @@ class GoDeps {
   /// Binding modules with an in-tree Go runtime, keyed by module path so a
   /// binding used many times is required once.
   final localModules = <String, GoLocalModule>{};
+
+  /// The core's own `dartrt` runtime (`packages/dart2tinygo/go/`, see
+  /// `docs/mapping.md` "Common Go runtime"), resolved once up front so the
+  /// rest of the tree walk stays synchronous. `null` only if this checkout
+  /// is missing `packages/dart2tinygo/go/` — a packaging bug, not something
+  /// a Dart entry point can trigger.
+  final GoLocalModule? dartrtModule;
 }
 
 /// Converts the `main()` function of a checked [ResolvedUnitResult] into a
 /// single-file Go program.
-GeneratedGoFile generateGoFile(ResolvedUnitResult result) {
+Future<GeneratedGoFile> generateGoFile(ResolvedUnitResult result) async {
   final mainDecl = result.unit.declarations
       .whereType<FunctionDeclaration>()
       .firstWhere((d) => d.name.lexeme == 'main');
   final body = (mainDecl.functionExpression.body as BlockFunctionBody).block;
 
-  final deps = GoDeps();
+  final deps = GoDeps(dartrtModule: await _resolveDartrtModule());
   final imports = deps.imports;
   final bodyBuffer = StringBuffer();
   for (final statement in body.statements) {
@@ -242,9 +253,12 @@ void _writeExpressionStatement(
 }
 
 /// A for-loop updater or a compound-assignment statement: `x++`/`x--` map
-/// onto the same Go postfix operators, and `x += y` (`+=`/`-=`/`*=`/`/=`)
-/// onto Go's identical compound-assignment tokens. Recorded in
-/// `docs/mapping.md`.
+/// onto the same Go postfix operators; `x += y` (`+=`/`-=`/`*=`/`/=`) maps
+/// onto Go's identical compound-assignment tokens; `x ~/= y` becomes `x /=
+/// y` (same reasoning as `~/`); `x %= y` can't reuse Go's `%=` (same
+/// negative-result mismatch as `%`), so it becomes the equivalent statement
+/// `x = dartrt.Mod(x, y)` — valid both as its own statement and as a Go
+/// for-loop post-clause. Recorded in `docs/mapping.md`.
 String _writeUpdaterExpression(Expression expression, GoDeps deps) {
   if (expression is PostfixExpression) {
     final target = (expression.operand as SimpleIdentifier).name;
@@ -253,7 +267,10 @@ String _writeUpdaterExpression(Expression expression, GoDeps deps) {
   if (expression is AssignmentExpression) {
     final target = (expression.leftHandSide as SimpleIdentifier).name;
     final rhs = _writeExpression(expression.rightHandSide, deps);
-    return '$target ${expression.operator.lexeme} $rhs';
+    final op = expression.operator.lexeme;
+    if (op == '%=') return '$target = ${_useDartrt(deps)}.Mod($target, $rhs)';
+    if (op == '~/=') return '$target /= $rhs';
+    return '$target $op $rhs';
   }
   throw StateError('unchecked updater expression: ${expression.runtimeType}');
 }
@@ -350,14 +367,22 @@ String _writeExpression(Expression expression, GoDeps deps) {
     return '(${_writeExpression(expression.expression, deps)})';
   }
   if (expression is BinaryExpression) {
-    // Comparison (==/!=/</<=/>/>=) and logical (&&/||) operators use the
-    // same tokens in Go as in Dart. Recorded in `docs/mapping.md`.
+    final op = expression.operator.lexeme;
     final left = _writeExpression(expression.leftOperand, deps);
     final right = _writeExpression(expression.rightOperand, deps);
-    return '$left ${expression.operator.lexeme} $right';
+    // Comparison (==/!=/</<=/>/>=), logical (&&/||), and int + - * use the
+    // same tokens in Go as in Dart. `~/` (truncating division) is Go's `/`;
+    // `%` goes through `dartrt.Mod` because Dart's `%` is never negative,
+    // unlike Go's. Recorded in `docs/mapping.md`.
+    if (op == '~/') return '$left / $right';
+    if (op == '%') return '${_useDartrt(deps)}.Mod($left, $right)';
+    return '$left $op $right';
   }
   if (expression is PrefixExpression && expression.operator.lexeme == '!') {
     return '!${_writeExpression(expression.operand, deps)}';
+  }
+  if (expression is PrefixExpression && expression.operator.lexeme == '-') {
+    return '-${_writeExpression(expression.operand, deps)}';
   }
   throw StateError('unchecked expression: ${expression.runtimeType}');
 }
@@ -405,6 +430,38 @@ void _useImport(GoImportSpec import, GoDeps deps) {
   if (local != null) {
     deps.localModules[local.modulePath] = local;
   }
+}
+
+/// Locates `packages/dart2tinygo/go/` the same way a binding's `go/` is
+/// found (`findLocalModuleNear`, walking up from a Dart source file to its
+/// `pubspec.yaml`) — except dartrt isn't declared by any `@GoImport`, so the
+/// source file is this very library's own location, resolved via
+/// `package:dart2tinygo`'s package config rather than the entry point's
+/// (the entry point's own package graph has no reason to depend on
+/// `dart2tinygo`).
+Future<GoLocalModule?> _resolveDartrtModule() async {
+  final fileUri = await Isolate.resolvePackageUri(
+    Uri.parse('package:dart2tinygo/src/backend/generator.dart'),
+  );
+  if (fileUri == null) return null;
+  return findLocalModuleNear(fileUri.toFilePath());
+}
+
+/// Registers `dartrt` as an import (only when actually used, like any other
+/// Go import) and returns the identifier to call it through.
+String _useDartrt(GoDeps deps) {
+  final module = deps.dartrtModule;
+  if (module == null) {
+    throw StateError(
+      'dartrt runtime not found (packages/dart2tinygo/go/ is missing from '
+      'this checkout); this is a packaging bug, not unsupported syntax.',
+    );
+  }
+  _useImport(
+    GoImportSpec(path: module.modulePath, alias: 'dartrt', localModule: module),
+    deps,
+  );
+  return 'dartrt';
 }
 
 String _goStringLiteral(String content) {
