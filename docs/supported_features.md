@@ -30,11 +30,11 @@ Any PR that adds a language feature must update this table.
 | `print` | Implemented (any `String` expression, or a string interpolation) |
 | String interpolation | Implemented for `int` / `double` / `bool` / `String` expressions |
 | `Duration` and `sleep` | Implemented (`dart:io` `sleep()`, `Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`) |
-| Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions and to methods on a `@GoType` receiver — a local, or (method chaining, any depth) another binding call's result — returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)) |
+| Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions, a `@GoType` class's own `external`/`@GoName`'d constructor (`Pin(3)`), and to methods on a `@GoType` receiver — a local, or (chaining, any depth) another binding call's/constructor's result — returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)) |
 | Cascade `..` | Implemented, on a `@GoType` binding value only (`newDisplay()..clear()..drawText(...)`); every section must be a bare `..method(args)` binding call, as a statement or a local's initializer |
 | `enum` | Implemented — a plain user enum (`enum Mode { off, on }`: `.index`, `.name`, `==`/`!=`, `switch`) and a `@GoType`/`@GoName` binding enum (each constant maps onto an existing Go identifier, like a `static external` getter constant); no type parameters, `with`/`implements`, extra fields/methods, or constructor arguments on a constant |
 | Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation |
-| `tinygo_machine`: LED, GPIO in/out, sleep | Not implemented |
+| `tinygo_machine`: LED, GPIO in/out, sleep | Implemented — GPIO (`Pin.led`, `Pin(n)`, `configure(PinMode.output\|input)`, `high()`/`low()`/`toggle()`/`get()`) and ADC (`newAdc(pin)`, `.read()`); board-agnostic, verified with `tinygo build` for `wioterminal` and `pico`. PWM not yet — see [`writing_bindings.md`](./writing_bindings.md#decided-not-yet-implemented-2026-09-22) |
 
 See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 `packages/dart2tinygo/test/golden/` for a worked example

@@ -11,6 +11,7 @@ A binding is a Dart package whose public API consists of `external` declarations
 | --- | --- | --- |
 | `@GoImport(path, alias: ...)` | The `library;` directive | The Go import for this library. `alias` is optional; without it Go's default package name (the last path segment) is used. |
 | `@GoName(name)` | An `external` top-level function | The fully qualified Go call target, e.g. `'wio.NewDisplay'` (prefix = the `@GoImport` alias). |
+| `@GoName(name)` | An `external` unnamed constructor of a `@GoType` class | The fully qualified Go call target, exactly like a top-level function (#21) — e.g. `'tgm.Pin'`, a Go type conversion, for a `Pin(n)` constructor. A `@GoType` value is otherwise only ever produced by a top-level binding function; this is the construction counterpart, and the result can be chained onto (`Pin(3).high()`) exactly like a call result (#30). |
 | `@GoName(name)` | An `external` instance method of a `@GoType` class | The Go method name, e.g. `'DrawText'`; invoked on the receiver. |
 | `@GoName(name)` | An `external` top-level getter, or an `external static` getter of a `@GoType` class | A Go constant or package-level variable, fully qualified, e.g. `'wio.Red'`; emitted as a bare identifier (no call). |
 | `@GoName(name)` | An `enum` constant, on a `@GoType` enum | A Go constant or package-level variable, fully qualified, e.g. `'machine.LED'`; emitted as a bare identifier, exactly like a `static external` getter above. |
@@ -88,7 +89,7 @@ func (d *Display) Width() int                               { /* ... */ }
 
 ## What the transpiler currently supports calling
 
-- Top-level binding functions and binding methods on a `@GoType` receiver — a local, or another binding call's result (chaining: `newDisplay().clear()`, at any depth) — as a statement (a non-void result is discarded), as the initializer of a local, as an argument to another binding call, or inside `print(...)`.
+- Top-level binding functions, a `@GoType` class's own binding constructor (`Pin(3)`, #21), and binding methods on a `@GoType` receiver — a local, or another binding call's/constructor's result (chaining: `newDisplay().clear()`, `Pin(3).high()`, at any depth) — as a statement (a non-void result is discarded), as the initializer of a local, as an argument to another binding call, or inside `print(...)`.
 - Cascades on a `@GoType` binding value (`newDisplay()..clear()..drawText(...)`), as a statement or as a local's initializer. Every cascade section must be a bare `..method(args)` binding call; a cascaded getter/setter/index section isn't supported (v0.1 has no classes/fields of its own to make one meaningful).
 - Result and local types: `int`, `double`, `bool`, `String`, and `@GoType` classes. A `@GoType` may name a value type (`'wio.Color'`) or a pointer (`'*wio.Display'`); the string is emitted verbatim, so both work.
 - Arguments: literals of those types, locals, other binding calls, and Go constant references (`red`, `Color.red`, `Pin.led`). Dart `int` / `double` / `bool` / `String` parameters correspond to Go `int` / `float64` / `bool` / `string`; declare the Go signature with those types (a Go side that wants `uint8` converts inside the binding — the transpiler emits no casts).
@@ -104,10 +105,17 @@ See [`mapping.md`](./mapping.md) for the generated Go.
   (errors become `panic` or a `bool` result), exactly as `wio.NewDisplay`
   folds the ILI9341/SPI setup. `@GoType` names the exact Go type expression,
   `*` included.
-- The `tinygo_machine` binding starts with `Pin.led` / `Pin(n)` /
-  `configure(PinMode.output | PinMode.input)` / `high()` / `low()` /
-  `toggle()` / `get()`; `machine.LED` and `machine.PinConfig{...}` are
-  absorbed by its Go half per the first rule.
+- **`tinygo_machine` PWM (#21 task list, last item) is deferred.** Unlike
+  GPIO/ADC — both a single common shape across every TinyGo target,
+  `machine.Pin`'s and `machine.ADC`'s methods in `machine.go` itself — PWM
+  has no common type: each chip family exposes a different peripheral type
+  (`machine.TCC0..4` on SAMD51, `machine.PWM0..7` on RP2, ...) and TinyGo's
+  own examples pick the pin/peripheral pairing per board rather than from an
+  arbitrary `Pin`. A board-agnostic `tinygo_machine` API is possible (walk
+  the candidate peripherals per chip family, in per-chip-family files under
+  `go/`, the way TinyGo's own `machine` package is organized) but is real,
+  unverified-on-hardware work of its own; tracked as a follow-up rather than
+  folded into the GPIO/ADC implementation.
 
 ## Shipping the Go runtime with the binding
 
@@ -125,4 +133,4 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 ## Reference bindings in this repository
 
 - `packages/wio_terminal`: Seeed Wio Terminal (LCD text). Used by `examples/hello_wioterminal`.
-- `packages/tinygo_machine`: planned board-agnostic bindings for TinyGo's `machine` package (not implemented yet).
+- `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`) and ADC (`newAdc` / `read`) implemented (#21); PWM deferred, see above. Used by `examples/blinky`.

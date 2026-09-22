@@ -300,9 +300,11 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
         ),
       );
     }
-    errors.addAll(_checkConstructorDeclaration(result, name, constructors.first));
+    errors
+        .addAll(_checkConstructorDeclaration(result, name, constructors.first));
   } else {
-    errors.addAll(_checkConstructorDeclaration(result, name, constructors.single));
+    errors.addAll(
+        _checkConstructorDeclaration(result, name, constructors.single));
   }
 
   return errors;
@@ -1443,16 +1445,21 @@ GoBinding? _bindingOf(MethodInvocation call) {
   return goBindingOf(callee);
 }
 
-/// A binding method's receiver: a local variable or parameter, or (method
-/// chaining, see #30) another binding call's result — all must hold a
-/// `@GoType` value, since that's the only Dart type a binding method can be
-/// called on.
+/// A binding method's receiver: a local variable or parameter, (method
+/// chaining, see #30) another binding call's result, or (#21) a `@GoType`
+/// class's own binding-constructor call's result (`Pin(3).high()`) — all
+/// must hold a `@GoType` value, since that's the only Dart type a binding
+/// method can be called on.
 bool _isValidBindingReceiver(Expression target) {
   if (!isGoType(target.staticType)) return false;
   if (target is SimpleIdentifier) {
     return target.element is LocalElement;
   }
   if (target is MethodInvocation) return _bindingOf(target) != null;
+  if (target is InstanceCreationExpression) {
+    final element = target.constructorName.element;
+    return element is ConstructorElement && goBindingOf(element) != null;
+  }
   return false;
 }
 
@@ -1550,7 +1557,12 @@ List<UnsupportedSyntaxError> _checkInstanceMethodCall(
 /// checking here — the same "trust the analyzer" precedent
 /// [_checkStatement]'s `ReturnStatement` case documents.
 ///
-/// Returns `null` (not `[]`) when [creation] isn't this shape, so the
+/// A `@GoType` class's own constructor (`Pin(3)`, #21) is instead a binding
+/// call: [_checkBindingConstruction] below, the construction counterpart of
+/// [_checkBoundCall] since a `@GoType` value is otherwise only ever
+/// produced by a top-level binding function (`docs/writing_bindings.md`).
+///
+/// Returns `null` (not `[]`) when [creation] isn't either shape, so the
 /// caller falls through to its usual unsupported-expression handling.
 List<UnsupportedSyntaxError>? _checkClassConstruction(
   ResolvedUnitResult result,
@@ -1559,13 +1571,49 @@ List<UnsupportedSyntaxError>? _checkClassConstruction(
   final element = creation.constructorName.element;
   if (element is! ConstructorElement) return null;
   final cls = element.enclosingElement;
-  if (cls is! ClassElement || goTypeOf(cls) != null) return null;
+  if (cls is! ClassElement) return null;
+
+  if (goTypeOf(cls) != null) {
+    return _checkBindingConstruction(result, creation, element);
+  }
 
   final errors = <UnsupportedSyntaxError>[];
   for (final arg in creation.argumentList.arguments) {
     errors.addAll(_checkExpression(result, arg));
   }
   return errors;
+}
+
+/// `Pin(3)` (#21): [element] must be `external`, carry `@GoName`, and live
+/// in a library with `@GoImport` — exactly [goBindingOf]'s requirements for
+/// a top-level function, reused here since [ConstructorElement] is itself
+/// an [ExecutableElement].
+List<UnsupportedSyntaxError> _checkBindingConstruction(
+  ResolvedUnitResult result,
+  InstanceCreationExpression creation,
+  ConstructorElement element,
+) {
+  if (goBindingOf(element) != null) {
+    final errors = <UnsupportedSyntaxError>[];
+    for (final arg in creation.argumentList.arguments) {
+      errors.addAll(_checkExpression(result, arg));
+    }
+    return errors;
+  }
+
+  final className = element.enclosingElement.name;
+  final String problem;
+  if (!element.isExternal) {
+    problem = 'constructor "$className" must be external to construct a '
+        '@GoType value (see docs/writing_bindings.md)';
+  } else if (goNameOf(element) == null) {
+    problem = 'constructor "$className" has no @GoName annotation (see '
+        'docs/writing_bindings.md)';
+  } else {
+    problem = 'constructor "$className" is declared in a library without a '
+        '@GoImport annotation (see docs/writing_bindings.md)';
+  }
+  return [_error(result, creation.offset, problem)];
 }
 
 /// The field [expression] (`c.value`, `this.value`, or bare `value` with
@@ -1622,7 +1670,9 @@ List<UnsupportedSyntaxError> _checkFieldWriteTarget(
   Expression target,
 ) {
   if (target is SimpleIdentifier) return const [];
-  if (target is PrefixedIdentifier) return _checkExpression(result, target.prefix);
+  if (target is PrefixedIdentifier) {
+    return _checkExpression(result, target.prefix);
+  }
   if (target is PropertyAccess) {
     final inner = target.target;
     if (inner is ThisExpression) return const [];
@@ -2506,9 +2556,12 @@ List<UnsupportedSyntaxError> _checkBoundCall(
 ) {
   final errors = <UnsupportedSyntaxError>[];
   final target = call.target;
-  if (target is MethodInvocation) {
-    // Method chaining (#30): the receiver is itself a binding call, whose
-    // own target/arguments need checking the same way this call's do.
+  if (target != null &&
+      (target is MethodInvocation || target is InstanceCreationExpression)) {
+    // Method chaining (#30), or chaining onto a @GoType binding-constructor
+    // call's result (#21, `Pin(3).high()`): the receiver is itself a
+    // binding call, whose own target/arguments need checking the same way
+    // this call's do.
     errors.addAll(_checkExpression(result, target));
   }
   for (final arg in call.argumentList.arguments) {

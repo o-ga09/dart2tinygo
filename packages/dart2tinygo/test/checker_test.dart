@@ -1495,6 +1495,35 @@ void main() {
 ''');
       expect(errors, isEmpty);
     });
+
+    test(
+        'accepts a @GoType class construction with @GoName on the '
+        'constructor', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final gpio = Gpio(3);
+  beep(gpio.value());
+  beep(Gpio(1 + 2).value());
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a @GoType class constructor without @GoName', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final gpio = BadGpio(3);
+  beep(1);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.line, 4);
+      expect(errors.single.reason, contains('no @GoName annotation'));
+    });
   });
 
   group('cascade and method chaining', () {
@@ -1728,8 +1757,7 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('accepts a constructor body that reassigns a this.x field',
-        () async {
+    test('accepts a constructor body that reassigns a this.x field', () async {
       final errors = await checkSource('''
 class Rect {
   int width;

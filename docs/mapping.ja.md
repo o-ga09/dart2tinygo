@@ -89,6 +89,7 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | `beep(3);`（`beep` が `@GoName('rt.Beep')`） | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');`（`drawText` が `@GoName('DrawText')`） | `d.DrawText(10, 20, "hi")` |
 | `newDisplay().clear();`（呼び出し結果へのメソッドチェーン。#30 参照） | `wio.NewDisplay().Clear()` — レシーバをそのまま出力する。チェーンの深さは何段でも良い |
+| `Pin(3)` — `@GoType` クラス自身のコンストラクタ（`external` かつ `@GoName` 付き、#21） | `tgm.Pin(3)` — トップレベルのバインディング呼び出しの構築版。`@GoType` の値はそれ以外に生成手段がないため。`Pin(3).high()` のように呼び出し結果と同様にチェーンできる |
 | `final n = sensor.read();` / `var ok = isReady();`（`int` / `double` / `bool` / `String` / `@GoType` の戻り値） | `n := sensor.Read()` / `ok := rt.IsReady()`（型は Go の推論に任せる。void 以外の戻り値を文として使った場合は捨てられる） |
 | `red` / `Button.a`（getter が `@GoName('rt.Red')` / `@GoName('rt.ButtonA')`） | `rt.Red` / `rt.ButtonA` — 呼び出しなしの識別子 |
 | 引数: `int` / `double` / `bool` / `String` のリテラル、ローカル変数、バインディング呼び出し、Go 定数の参照 | そのまま出力：型なし定数 / 識別子 / 呼び出し / 識別子。キャストは出さないので、Go 側の引数型は `int` / `float64` / `bool` / `string` か `@GoType` そのものにする |

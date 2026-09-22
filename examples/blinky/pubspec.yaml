@@ -1,0 +1,13 @@
+name: blinky
+description: Blinks the board's own LED via dart2tinygo, on any TinyGo target.
+version: 0.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+resolution: workspace
+
+dependencies:
+  # Resolved to ../../packages/tinygo_machine by the workspace. Outside this
+  # repository, depend on the published package instead.
+  tinygo_machine: ^0.0.0

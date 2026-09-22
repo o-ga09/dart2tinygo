@@ -32,9 +32,9 @@
 | カスケード `..` | 実装済み。`@GoType` のバインディング値のみ対応（`newDisplay()..clear()..drawText(...)`）。各セクションは必ず素の `..method(args)` バインディング呼び出しでなければならず、文として、またはローカル変数の初期化子として使える |
 | `enum` | 実装済み — ユーザー定義の enum（`enum Mode { off, on }`：`.index`、`.name`、`==`/`!=`、`switch` に対応）と、`@GoType`/`@GoName` によるバインディング enum（各値が既存の Go 識別子にマップされる。`static external` getter 定数と同様）。型パラメータ、`with`/`implements`、追加のフィールド・メソッド、値へのコンストラクタ引数は未対応 |
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
-| 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数と、`@GoType` のレシーバ — ローカル変数、または（メソッドチェーン。任意の深さ）別のバインディング呼び出しの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
+| 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数、`@GoType` クラス自身の `external`／`@GoName` 付きコンストラクタ（`Pin(3)`）、`@GoType` のレシーバ — ローカル変数、または（チェーン。任意の深さ）別のバインディング呼び出し／コンストラクタの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
 | 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `double` の文字列補間に組み込み済み |
-| `tinygo_machine`: LED、GPIO入出力、スリープ | 未実装 |
+| `tinygo_machine`: LED、GPIO入出力、スリープ | 実装済み — GPIO（`Pin.led`、`Pin(n)`、`configure(PinMode.output\|input)`、`high()`/`low()`/`toggle()`/`get()`）と ADC（`newAdc(pin)`、`.read()`）。ボード非依存で `wioterminal`/`pico` 双方の `tinygo build` で確認済み。PWM は未対応 — [`writing_bindings.ja.md`](./writing_bindings.ja.md) の「決定済み・未実装」参照 |
 
 正確な変換ルールは [`docs/mapping.ja.md`](./mapping.ja.md) を、実例は
 `packages/dart2tinygo/test/golden/`（`minimal_blink.dart` / `.go`）を参照。
