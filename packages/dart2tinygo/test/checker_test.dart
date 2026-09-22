@@ -543,6 +543,195 @@ void main() {
     });
   });
 
+  group('top-level functions', () {
+    test('accepts a function with an expression body', () async {
+      final errors = await checkSource('''
+int square(int x) => x * x;
+
+void main() {
+  print('\${square(3)}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a function with a block body and return', () async {
+      final errors = await checkSource('''
+int add(int a, int b) {
+  var sum = a + b;
+  return sum;
+}
+
+void main() {
+  print('\${add(1, 2)}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a void function with an expression body', () async {
+      final errors = await checkSource('''
+void log(String s) => print(s);
+
+void main() {
+  log('hi');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a void function with a bare return', () async {
+      final errors = await checkSource('''
+void logIfPositive(int x) {
+  if (x <= 0) {
+    return;
+  }
+  print('\$x');
+}
+
+void main() {
+  logIfPositive(1);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts multiple parameters of different supported types', () async {
+      final errors = await checkSource('''
+String describe(int n, double ratio, bool ready, String name) {
+  return name;
+}
+
+void main() {
+  print(describe(1, 1.5, true, 'x'));
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a @GoType parameter and return type', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void pressTwice(Widget w, Button b) {
+  w.press(b);
+  w.press(b);
+}
+
+Button firstButton() => Button.a;
+
+void main() {
+  final widget = newWidget();
+  pressTwice(widget, firstButton());
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts recursion', () async {
+      final errors = await checkSource('''
+int fib(int n) {
+  if (n < 2) {
+    return n;
+  }
+  return fib(n - 1) + fib(n - 2);
+}
+
+void main() {
+  print('\${fib(5)}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a call to a function declared later in the file', () async {
+      final errors = await checkSource('''
+void main() {
+  print('\${later(1)}');
+}
+
+int later(int x) => x + 1;
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a function call as a statement, discarding its result',
+        () async {
+      final errors = await checkSource('''
+int next(int x) => x + 1;
+
+void main() {
+  next(1);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a List<int> parameter and return type', () async {
+      final errors = await checkSource('''
+List<int> withFirst(List<int> data, int first) {
+  data[0] = first;
+  return data;
+}
+
+void main() {
+  var data = <int>[0, 0];
+  var updated = withFirst(data, 9);
+  print('\${updated.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a named parameter', () async {
+      final errors = await checkSource('''
+int f({required int x}) => x;
+
+void main() {
+  print('\${f(x: 1)}');
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('positional'));
+    });
+
+    test('reports an optional positional parameter', () async {
+      final errors = await checkSource('''
+int f([int x = 0]) => x;
+
+void main() {
+  print('\${f()}');
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('positional'));
+    });
+
+    test('reports an unsupported parameter type', () async {
+      final errors = await checkSource('''
+void f(Object x) {}
+
+void main() {
+  f(1);
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('Object'));
+    });
+
+    test('reports an unsupported return type', () async {
+      final errors = await checkSource('''
+Object f() => 1;
+
+void main() {
+  f();
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('Object'));
+    });
+  });
+
   group('List<int>', () {
     test('accepts a List<int> local with an explicit type argument', () async {
       final errors = await checkSource('''

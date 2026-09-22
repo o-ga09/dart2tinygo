@@ -95,6 +95,14 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (switch_case)
         working-directory: /tmp/dart2tinygo-switch-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises top-level functions beyond main: parameters, return,
+      # expression bodies, recursion, forward references.
+      - name: dart2tinygo build (top_level_functions golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/top_level_functions.dart -o /tmp/dart2tinygo-funcs-out
+      - name: tinygo build -target=${{ matrix.target }} (top_level_functions)
+        working-directory: /tmp/dart2tinygo-funcs-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'
