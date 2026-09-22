@@ -128,7 +128,11 @@ List<UnsupportedSyntaxError> _checkStatement(
           );
           continue;
         }
-        errors.addAll(_checkExpression(result, initializer));
+        if (initializer is CascadeExpression) {
+          errors.addAll(_checkCascadeExpression(result, initializer));
+        } else {
+          errors.addAll(_checkExpression(result, initializer));
+        }
       }
 
     case ExpressionStatement():
@@ -512,6 +516,10 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
 ) {
   final expression = statement.expression;
 
+  if (expression is CascadeExpression) {
+    return _checkCascadeExpression(result, expression);
+  }
+
   if (expression is PostfixExpression &&
       (expression.operator.lexeme == '++' ||
           expression.operator.lexeme == '--')) {
@@ -572,9 +580,10 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
 
 /// The `@GoName` binding behind [call], or `null` if [call] is not a
 /// (complete) binding call. A binding call is either a bare call to an
-/// `external` top-level function, or a method call on a local whose type is
-/// a `@GoType` class; in both cases the callee must be `external`, carry
-/// `@GoName`, and come from a library with `@GoImport`.
+/// `external` top-level function, or a method call on a `@GoType`-typed
+/// receiver — a local variable, or (method chaining, see #30) another
+/// binding call's result; in both cases the callee must be `external`,
+/// carry `@GoName`, and come from a library with `@GoImport`.
 GoBinding? _bindingOf(MethodInvocation call) {
   final callee = call.methodName.element;
   if (callee is! ExecutableElement) return null;
@@ -582,14 +591,23 @@ GoBinding? _bindingOf(MethodInvocation call) {
   if (target == null) {
     if (callee is! TopLevelFunctionElement) return null;
   } else {
-    if (callee is! MethodElement) return null;
-    if (target is! SimpleIdentifier ||
-        target.element is! LocalVariableElement ||
-        !isGoType(target.staticType)) {
+    if (callee is! MethodElement || !_isValidBindingReceiver(target)) {
       return null;
     }
   }
   return goBindingOf(callee);
+}
+
+/// A binding method's receiver: a local variable, or (method chaining, see
+/// #30) another binding call's result — both must hold a `@GoType` value,
+/// since that's the only Dart type a binding method can be called on.
+bool _isValidBindingReceiver(Expression target) {
+  if (!isGoType(target.staticType)) return false;
+  if (target is SimpleIdentifier) {
+    return target.element is LocalVariableElement;
+  }
+  if (target is MethodInvocation) return _bindingOf(target) != null;
+  return false;
 }
 
 /// Explains why [reference] (a call or a constant reference) looks like a
@@ -630,8 +648,8 @@ String? _describeBindingProblem(Expression reference) {
           '"${target.staticType?.getDisplayString() ?? '?'}", which is not a '
           '@GoType class';
     }
-    return 'binding method "$name" must be called on a local variable '
-        'holding a @GoType value';
+    return 'binding method "$name" must be called on a local variable or '
+        'another binding call, both holding a @GoType value';
   }
   return null;
 }
@@ -1280,9 +1298,72 @@ List<UnsupportedSyntaxError> _checkBoundCall(
   MethodInvocation call,
 ) {
   final errors = <UnsupportedSyntaxError>[];
+  final target = call.target;
+  if (target is MethodInvocation) {
+    // Method chaining (#30): the receiver is itself a binding call, whose
+    // own target/arguments need checking the same way this call's do.
+    errors.addAll(_checkExpression(result, target));
+  }
   for (final arg in call.argumentList.arguments) {
     errors.addAll(_checkExpression(result, arg));
   }
+  return errors;
+}
+
+/// `a..b()..c()`: a cascade on a `@GoType` binding value. Every section
+/// must be a bare `..method(args)` binding call — v0.1 has no classes or
+/// fields of its own, so a cascaded getter/setter/index section (`..field`,
+/// `..field = v`, `..[i]`) has nothing meaningful to map onto.
+List<UnsupportedSyntaxError> _checkCascadeExpression(
+  ResolvedUnitResult result,
+  CascadeExpression expression,
+) {
+  final errors = <UnsupportedSyntaxError>[
+    ..._checkExpression(result, expression.target),
+  ];
+
+  final targetType = expression.target.staticType;
+  if (!isGoType(targetType)) {
+    errors.add(
+      _error(
+        result,
+        expression.target.offset,
+        'cascade ".." is only supported on a @GoType binding value, but '
+        '"${targetType?.getDisplayString() ?? '?'}" is not one',
+      ),
+    );
+    return errors;
+  }
+
+  for (final section in expression.cascadeSections) {
+    if (section is! MethodInvocation || section.target != null) {
+      errors.add(
+        _error(
+          result,
+          section.offset,
+          'cascade section "${_expressionLabel(section)}" is not supported '
+          'in v0.1 minimal scope (only "..method(args)" binding calls)',
+        ),
+      );
+      continue;
+    }
+    final callee = section.methodName.element;
+    if (callee is! ExecutableElement || goBindingOf(callee) == null) {
+      final problem = _describeBindingProblem(section);
+      errors.add(
+        _error(
+          result,
+          section.offset,
+          problem ??
+              'cascade method "${section.methodName.name}" is not a '
+                  '@GoType binding method',
+        ),
+      );
+      continue;
+    }
+    errors.addAll(_checkBoundCall(result, section));
+  }
+
   return errors;
 }
 

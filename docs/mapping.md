@@ -52,6 +52,7 @@ map 1:1 onto Go calls; the transpiler adds no wrapper code of its own.
 | `final d = newDisplay();` where `newDisplay` is `@GoName('wio.NewDisplay')` | `d := wio.NewDisplay()` (`final`/`var` make no difference; Go infers the `@GoType`) |
 | `beep(3);` where `beep` is `@GoName('rt.Beep')` | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');` where `drawText` is `@GoName('DrawText')` | `d.DrawText(10, 20, "hi")` |
+| `newDisplay().clear();` (method chaining on a call result, see #30) | `wio.NewDisplay().Clear()` — the receiver is emitted verbatim, at any chaining depth |
 | `final n = sensor.read();` / `var ok = isReady();` (`int` / `double` / `bool` / `String` / `@GoType` results) | `n := sensor.Read()` / `ok := rt.IsReady()` (Go infers the type; a non-void result used as a statement is discarded) |
 | `red` / `Button.a` where the getter is `@GoName('rt.Red')` / `@GoName('rt.ButtonA')` | `rt.Red` / `rt.ButtonA` — a bare identifier, no call |
 | Arguments: `int` / `double` / `bool` / `String` literal, local, binding call, Go constant reference | Emitted verbatim: untyped constant / identifier / call / identifier. No casts: a Go parameter must be `int` / `float64` / `bool` / `string` or the `@GoType` itself |
@@ -136,6 +137,21 @@ the same class of BMP/astral caveat every other option here also has.
 | `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
 | `a.codeUnits` | `[]byte(a)` (see "List<int>" above) |
 
+## Cascades (decided 2026-09-22, implemented)
+
+`a..b()..c()` isn't a single Go expression — Go has nothing that reads a
+value and performs a sequence of calls on it without repeating the receiver
+— so it becomes a temporary plus a statement sequence, per HANDOFF
+§4.4's own `Pin.led..configure(...)` example. Restricted to a `@GoType`
+binding value, and every cascade section must be a bare `..method(args)`
+binding call (v0.1 has no classes/fields of its own to make a cascaded
+getter/setter/index section meaningful).
+
+| Dart | Go |
+| --- | --- |
+| `newDisplay()..clear()..drawText(40, 120, 'Hi');` (a statement) | `_t0 := wio.NewDisplay()` then `_t0.Clear()` then `_t0.DrawText(40, 120, "Hi")` — a synthetic `_t0`/`_t1`/... receiver, unique across the whole generated file |
+| `final d = newDisplay()..clear();` (a local's initializer) | `d := wio.NewDisplay()` then `d.Clear()` — the local's own name is reused as the receiver, no synthetic temp needed |
+
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
@@ -153,7 +169,8 @@ the same class of BMP/astral caveat every other option here also has.
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
 | `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
 | `for-in` / `switch` | `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
-| cascade `a..b()..c()` | temporary + statement sequence | decided |
+| cascade `a..b()..c()` on a `@GoType` binding value | temporary (or the local's own name, as an initializer) + statement sequence — see "Cascades" above | impl. |
+| method chaining `a().b()` on a binding call result | direct — see "Annotation bindings" above | impl. |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |
 | inheritance, mixins, generics, `T?`, `throw`/exceptions, `async` | rejected by the checker | decided (future) |
 

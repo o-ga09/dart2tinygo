@@ -70,7 +70,8 @@ func (d *Display) Width() int                               { /* ... */ }
 
 ## What the transpiler currently supports calling
 
-- Top-level binding functions and binding methods on a local that holds a `@GoType` value (`display.drawText(...)`), as a statement (a non-void result is discarded), as the initializer of a local, as an argument to another binding call, or inside `print(...)`. Chaining on a call result (`newDisplay().clear()`) is not supported yet.
+- Top-level binding functions and binding methods on a `@GoType` receiver — a local, or another binding call's result (chaining: `newDisplay().clear()`, at any depth) — as a statement (a non-void result is discarded), as the initializer of a local, as an argument to another binding call, or inside `print(...)`.
+- Cascades on a `@GoType` binding value (`newDisplay()..clear()..drawText(...)`), as a statement or as a local's initializer. Every cascade section must be a bare `..method(args)` binding call; a cascaded getter/setter/index section isn't supported (v0.1 has no classes/fields of its own to make one meaningful).
 - Result and local types: `int`, `double`, `bool`, `String`, and `@GoType` classes. A `@GoType` may name a value type (`'wio.Color'`) or a pointer (`'*wio.Display'`); the string is emitted verbatim, so both work.
 - Arguments: literals of those types, locals, other binding calls, and Go constant references (`red`, `Color.red`). Dart `int` / `double` / `bool` / `String` parameters correspond to Go `int` / `float64` / `bool` / `string`; declare the Go signature with those types (a Go side that wants `uint8` converts inside the binding — the transpiler emits no casts).
 - Go constants and package-level variables: `@GoName` on an `external` top-level getter or an `external static` getter. Instance getters are not bindings; expose a Go method that returns a value as an `external` method.
@@ -87,8 +88,6 @@ See [`mapping.md`](./mapping.md) for the generated Go.
   `*` included.
 - **Enums:** a Dart `enum` may carry `@GoType('machine.Pin')` with
   `@GoName('machine.D0')` on each value.
-- **Chaining and cascades** on binding results (`newDisplay().clear()`,
-  `newDisplay()..clear()..drawText(...)`).
 - The `tinygo_machine` binding starts with `Pin.led` / `Pin(n)` /
   `configure(PinMode.output | PinMode.input)` / `high()` / `low()` /
   `toggle()` / `get()`; `machine.LED` and `machine.PinConfig{...}` are

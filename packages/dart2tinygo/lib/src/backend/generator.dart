@@ -44,6 +44,12 @@ class GoDeps {
   /// is missing `packages/dart2tinygo/go/` — a packaging bug, not something
   /// a Dart entry point can trigger.
   final GoLocalModule? dartrtModule;
+
+  /// Counter behind the synthetic `_t0`, `_t1`, ... receiver names a cascade
+  /// used as a statement mints (`docs/mapping.md`, "Cascades and method
+  /// chaining") — monotonically increasing across the whole file keeps every
+  /// temp unique regardless of which function it's minted in.
+  int nextTempId = 0;
 }
 
 /// Converts the `main()` function of a checked [ResolvedUnitResult] into a
@@ -103,8 +109,19 @@ void _writeStatement(
   switch (statement) {
     case VariableDeclarationStatement():
       for (final variable in statement.variables.variables) {
-        final value = _writeExpression(variable.initializer!, deps);
-        out.writeln('$indent${variable.name.lexeme} := $value');
+        final initializer = variable.initializer!;
+        final name = variable.name.lexeme;
+        if (initializer is CascadeExpression) {
+          // Reuses the local's own name as the cascade's receiver instead
+          // of minting a `_t0`-style temporary (see
+          // [_writeCascadeExpressionStatement]) — the local already names
+          // the value.
+          out.writeln(
+              '$indent$name := ${_writeExpression(initializer.target, deps)}');
+          _writeCascadeSections(initializer, name, out, deps, indent: indent);
+        } else {
+          out.writeln('$indent$name := ${_writeExpression(initializer, deps)}');
+        }
       }
 
     case WhileStatement():
@@ -216,6 +233,11 @@ void _writeExpressionStatement(
   GoDeps deps, {
   required String indent,
 }) {
+  if (expression is CascadeExpression) {
+    _writeCascadeExpressionStatement(expression, out, deps, indent: indent);
+    return;
+  }
+
   if (expression is AssignmentExpression &&
       expression.leftHandSide is IndexExpression) {
     // `data[i] = v;`: not a compound assignment, so it doesn't go through
@@ -572,9 +594,11 @@ bool _isListOfInt(DartType? type) {
 /// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes
 /// `<goName>(args)` (the name is already package-qualified, e.g.
 /// `wio.NewDisplay`), a method binding becomes `<receiver>.<goName>(args)`.
-/// The binding library's `@GoImport` is recorded so the import block and,
-/// for in-tree runtimes, the `go.mod` `replace` are emitted. Recorded in
-/// `docs/mapping.md`.
+/// The receiver is written with [_writeExpression], not just a bare
+/// identifier: method chaining (#30) means it may itself be another bound
+/// call, which recurses back into this function. The binding library's
+/// `@GoImport` is recorded so the import block and, for in-tree runtimes,
+/// the `go.mod` `replace` are emitted. Recorded in `docs/mapping.md`.
 String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
   final callee = call.methodName.element;
   if (callee is! ExecutableElement) return null;
@@ -590,7 +614,47 @@ String? _writeBoundCall(MethodInvocation call, GoDeps deps) {
   if (target == null) {
     return '${binding.goName}($args)';
   }
-  return '${(target as SimpleIdentifier).name}.${binding.goName}($args)';
+  return '${_writeExpression(target, deps)}.${binding.goName}($args)';
+}
+
+/// `a..b()..c()`: not a single Go expression, so this only handles the two
+/// syntactic positions the checker accepts it in — an `ExpressionStatement`
+/// ([_writeCascadeExpressionStatement]) and a local's initializer (inline
+/// in [_writeStatement]'s `VariableDeclarationStatement` case, which reuses
+/// the local's own name as [receiver] instead of minting a temporary).
+/// [receiver] is written once up front by the caller (`receiver := target`);
+/// every cascade section then becomes its own `receiver.goName(args)`
+/// statement — the same shape [_writeBoundCall] would produce for a
+/// non-cascaded call on that receiver.
+void _writeCascadeSections(
+  CascadeExpression expression,
+  String receiver,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  for (final section in expression.cascadeSections) {
+    final call = section as MethodInvocation;
+    final callee = call.methodName.element as ExecutableElement;
+    final binding = goBindingOf(callee)!;
+    _useImport(binding.import, deps);
+    final args = call.argumentList.arguments
+        .map((arg) => _writeExpression(arg, deps))
+        .join(', ');
+    out.writeln('$indent$receiver.${binding.goName}($args)');
+  }
+}
+
+void _writeCascadeExpressionStatement(
+  CascadeExpression expression,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  final receiver = '_t${deps.nextTempId++}';
+  out.writeln(
+      '$indent$receiver := ${_writeExpression(expression.target, deps)}');
+  _writeCascadeSections(expression, receiver, out, deps, indent: indent);
 }
 
 void _useImport(GoImportSpec import, GoDeps deps) {

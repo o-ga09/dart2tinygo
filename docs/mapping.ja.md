@@ -52,6 +52,7 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | `final d = newDisplay();`（`newDisplay` が `@GoName('wio.NewDisplay')`） | `d := wio.NewDisplay()`（`final`/`var` の違いはなし。`@GoType` は Go 側の型推論に任せる） |
 | `beep(3);`（`beep` が `@GoName('rt.Beep')`） | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');`（`drawText` が `@GoName('DrawText')`） | `d.DrawText(10, 20, "hi")` |
+| `newDisplay().clear();`（呼び出し結果へのメソッドチェーン。#30 参照） | `wio.NewDisplay().Clear()` — レシーバをそのまま出力する。チェーンの深さは何段でも良い |
 | `final n = sensor.read();` / `var ok = isReady();`（`int` / `double` / `bool` / `String` / `@GoType` の戻り値） | `n := sensor.Read()` / `ok := rt.IsReady()`（型は Go の推論に任せる。void 以外の戻り値を文として使った場合は捨てられる） |
 | `red` / `Button.a`（getter が `@GoName('rt.Red')` / `@GoName('rt.ButtonA')`） | `rt.Red` / `rt.ButtonA` — 呼び出しなしの識別子 |
 | 引数: `int` / `double` / `bool` / `String` のリテラル、ローカル変数、バインディング呼び出し、Go 定数の参照 | そのまま出力：型なし定数 / 識別子 / 呼び出し / 識別子。キャストは出さないので、Go 側の引数型は `int` / `float64` / `bool` / `string` か `@GoType` そのものにする |
@@ -127,6 +128,20 @@ Go の `string` をスライスするのにバイトかルーンのインデッ�
 | `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
 | `a.codeUnits` | `[]byte(a)`（上の「List<int>」を参照） |
 
+## カスケード（2026-09-22 決定、実装済み）
+
+`a..b()..c()` は単一の Go 式にはならない — Go にはレシーバを繰り返さずに1つの値へ
+一連の呼び出しを行う構文がないため — 一時変数と文の列に変換する。HANDOFF §4.4 に
+ある `Pin.led..configure(...)` の例の通り。`@GoType` のバインディング値に限定し、
+各カスケードセクションは必ず素の `..method(args)` バインディング呼び出しでなければ
+ならない（v0.1 には自前のクラス・フィールドがなく、カスケードした getter/setter/
+添字セクションには対応する意味がないため）。
+
+| Dart | Go |
+| --- | --- |
+| `newDisplay()..clear()..drawText(40, 120, 'Hi');`（文として） | `_t0 := wio.NewDisplay()` の後 `_t0.Clear()`、`_t0.DrawText(40, 120, "Hi")` — 合成の `_t0`/`_t1`/... レシーバ。生成ファイル全体で一意 |
+| `final d = newDisplay()..clear();`（ローカル変数の初期化子として） | `d := wio.NewDisplay()` の後 `d.Clear()` — ローカル変数自身の名前をレシーバに再利用し、合成の一時変数は不要 |
+
 ## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
 | Dart | Go | 状態 |
@@ -144,7 +159,8 @@ Go の `string` をスライスするのにバイトかルーンのインデッ�
 | `if` / `else if` / `else` | そのまま対応。各分岐は必ずブロック（上の v0.1 の表を参照） | 実装済 |
 | `while`（一般条件）/ `for`（宣言変数1つ、updater1つ）/ `break` / `continue` | そのまま対応。上の v0.1 の表を参照 | 実装済 |
 | `for-in` / `switch` | `for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
-| カスケード `a..b()..c()` | 一時変数 + 文の列 | 決定 |
+| `@GoType` バインディング値へのカスケード `a..b()..c()` | 一時変数（初期化子の場合はローカル変数自身の名前）+ 文の列 — 上の「カスケード」を参照 | 実装済 |
+| バインディング呼び出し結果へのメソッドチェーン `a().b()` | そのまま対応 — 上の「注釈バインディング」を参照 | 実装済 |
 | `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |
 | 継承・mixin・ジェネリクス・`T?`・`throw`/例外・`async` | checker が拒否 | 決定（将来） |
 
