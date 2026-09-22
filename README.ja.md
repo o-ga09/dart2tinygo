@@ -8,9 +8,11 @@
 
 Dart のサブセットを TinyGo のソースコードに変換し、マイコンで動かすための OSS です。
 
-> **Status:** 初期構築中。v0.1 最小変換は実装済みです（トップレベルの
-> `void main()` 単体、`int` 型ローカル変数、`while (true)`、`print(...)`、
-> `sleep(Duration(...))`、注釈バインディングの呼び出し）。正確な範囲は
+> **Status:** v0.0.2 を実装済みです。
+> 言語コア（`int`/`double`/`bool`/`String`/`List<int>`、制御構文、継承なしのクラス、
+> `enum`、カスケード、注釈バインディング）に加え、`tinygo_machine`（GPIO/ADC/PWM）と
+> Wio Terminal（LCD、ボタン、ブザー、各種センサー、加速度センサー、赤外線送信、
+> USB HID、microSD、Wi-Fi/HTTP）のバインディングを一通りカバーしています。正確な範囲は
 > [対応言語機能](./docs/supported_features.ja.md) を参照してください。
 
 ## これは何か

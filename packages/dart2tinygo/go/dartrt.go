@@ -27,7 +27,7 @@ func Mod(a, b int) int {
 // FormatDouble formats f the way Dart's double.toString() does. Go's
 // strconv.FormatFloat(f, 'f', -1, 64) prints "1" for a whole number; Dart
 // prints "1.0". NaN/Infinity formatting is not handled specially yet (out
-// of v0.1 minimal scope — sensor readings are always finite).
+// of v0.0.2 scope — sensor readings are always finite).
 func FormatDouble(f float64) string {
 	s := strconv.FormatFloat(f, 'f', -1, 64)
 	for i := 0; i < len(s); i++ {

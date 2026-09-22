@@ -12,7 +12,7 @@ import 'package:dart2tinygo/src/frontend/bindings.dart';
 ///
 /// Callers must have already run [checkEntryPoint] and confirmed there are
 /// no [UnsupportedSyntaxError]s; this generator assumes the AST matches the
-/// v0.1 minimal subset and does not re-validate it.
+/// v0.0.2 subset and does not re-validate it.
 class GeneratedGoFile {
   GeneratedGoFile(this.source, {this.localModules = const []});
 

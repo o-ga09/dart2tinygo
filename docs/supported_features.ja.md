@@ -4,7 +4,7 @@
 
 言語機能を追加した PR では、必ずこの表を更新すること。
 
-## v0.1
+## v0.0.2
 
 | 機能 | 状態 |
 | --- | --- |
@@ -40,15 +40,15 @@
 | `wio_terminal/sd`: microSD（FAT） | 実装済み — 他のプログラムのビルドを肥大化させないよう、別ライブラリ（`import 'package:wio_terminal/sd.dart';`）と別 Go サブパッケージ（`go/sd`、cgo の `tinygo.org/x/tinyfs/fatfs`）に分離。`mountSdCard()`/`.isInserted()`/`.exists()`/`.readText()`/`.writeText()`/`.appendText()`/`.readBytes()`/`.writeBytes()`。`dart2tinygo build` を通した end-to-end で `tinygo build -target=wioterminal` を確認済み。[`writing_bindings.ja.md`](./writing_bindings.ja.md) の「重い依存を別の Go サブパッケージに分離する」参照 |
 | `wio_terminal/wifi`: Wi-Fi（RTL8720DN）+ HTTP | 実装済み — 別ライブラリ（`import 'package:wio_terminal/wifi.dart';`）と別 Go サブパッケージ（`go/wifi`、`net/http` + `netlink/probe` 経由の `tinygo.org/x/drivers/rtl8720dn`）。`newWiFi()`/`.connect()`/`.isConnected()`/`.disconnect()`/`.ipAddress()`/`.httpGet()`/`.httpPost()`。RTL8720DNファームウェア2.1.2以降と `tinygo build`/`flash` への `-stack-size=4KB` が必要。`dart2tinygo build` を通した end-to-end で `tinygo build -target=wioterminal` を確認済み。実アクセスポイントに対する動作は未検証（実機なし）。[`writing_bindings.ja.md`](./writing_bindings.ja.md) の「重い依存を別の Go サブパッケージに分離する」参照 |
 | `wio_terminal/pins`: 40ピンヘッダー + Groveピン定数 | 実装済み — `WioPins.d0`...`.d8`/`.a0`...`.a8`（`lib/pins.dart`）。独自の互換性の無いピン型ではなく `tinygo_machine` 自身の `Pin` 型を共有する。Go の `replace` はモジュール境界を越えて自動では伝播しないため、バインディング自身のローカルモジュール `replace` を生成される `go.mod` に推移的に伝播させる `dart2tinygo` CLI 側の修正（`localModuleReplacesOf`/`_withTransitiveLocalModules`）が必要だった。`dart2tinygo build` を通した end-to-end で `tinygo build -target=wioterminal` を確認済み。[`writing_bindings.ja.md`](./writing_bindings.ja.md) の「`@GoType` をバインディングパッケージ間で共有する」参照 |
+| クラス（フィールド・コンストラクタ・メソッド、継承なし） | 実装済み — `class Foo { ... }` は Go の `struct` + `NewFoo(...)` + ポインタレシーバのメソッドにマップされる（インスタンスは常に `*Foo`）。1 つの素の generative constructor（`this.field`／通常の位置引数のみ、initializer list 不可）、対応済みの型を持つフィールド（宣言時の初期化子は不可 — コンストラクタで設定する）、インスタンスメソッド（トップレベル関数と同じ規則）、フィールドアクセスと `this`／暗黙の `this`、インスタンスメソッド呼び出し、`==`/`!=`（同一性比較。Go 自身のポインタ `==` と同じ）に対応。`extends`/`implements`/`with`、クラス修飾子（`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`）、ジェネリクス、`static`、getter/setter/演算子オーバーロード、nullable（`T?`）型、名前付き／const／factory コンストラクタは checker が拒否する — 詳細は [`mapping.ja.md`](./mapping.ja.md) の「クラス（継承なし）」参照 |
 
 正確な変換ルールは [`docs/mapping.ja.md`](./mapping.ja.md) を、実例は
 `packages/dart2tinygo/test/golden/`（`minimal_blink.dart` / `.go`）を参照。
 
-## v0.2
+## v0.0.3
 
 | 機能 | 状態 |
 | --- | --- |
-| クラス（フィールド・コンストラクタ・メソッド、継承なし） | 実装済み — `class Foo { ... }` は Go の `struct` + `NewFoo(...)` + ポインタレシーバのメソッドにマップされる（インスタンスは常に `*Foo`）。1 つの素の generative constructor（`this.field`／通常の位置引数のみ、initializer list 不可）、対応済みの型を持つフィールド（宣言時の初期化子は不可 — コンストラクタで設定する）、インスタンスメソッド（トップレベル関数と同じ規則）、フィールドアクセスと `this`／暗黙の `this`、インスタンスメソッド呼び出し、`==`/`!=`（同一性比較。Go 自身のポインタ `==` と同じ）に対応。`extends`/`implements`/`with`、クラス修飾子（`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`）、ジェネリクス、`static`、getter/setter/演算子オーバーロード、nullable（`T?`）型、名前付き／const／factory コンストラクタは checker が拒否する — 詳細は [`mapping.ja.md`](./mapping.ja.md) の「クラス（継承なし）」参照 |
 | `List<T>` → Go スライス | 未実装 |
 | ビット演算、`int.toSigned(n)` | 未実装 |
 
