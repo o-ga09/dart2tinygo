@@ -71,6 +71,11 @@ dart run bin/dart2tinygo.dart flash ../../examples/hello_wioterminal/main.dart -
 `@GoImport` / `@GoName` / `@GoType` を付けた素の Dart 宣言で、トランスパイラ本体は
 ボードのことを何も知りません。[バインディングの作り方](./docs/writing_bindings.ja.md) を参照してください。
 
+Wio Terminal の全バインディング（LED、ボタン、ブザー、照度/マイクセンサー、
+加速度センサー、赤外線、microSD、Wi-Fi/HTTP）を一つのメニューから動かせる
+プログラムは [`examples/wioterminal_demo`](./examples/wioterminal_demo) を
+参照してください。
+
 ## 数値の意味論
 
 `int` は Go の `int` に対応し、**プラットフォーム幅**です：デスクトップでは 64bit
@@ -88,7 +93,7 @@ packages/
   tinygo_annotations/  # バインディング用の注釈（@GoImport / @GoName / @GoType）
   tinygo_machine/      # TinyGo 共通 machine パッケージのバインディング
   wio_terminal/        # Seeed Wio Terminal バインディング（LCD）。Dart 注釈 + Go ランタイム
-examples/              # サンプル（hello_wioterminal、blinky など）
+examples/              # サンプル（hello_wioterminal、blinky、button_led、wioterminal_demo）
 docs/                  # 対応機能表・変換ルール・バインディングの書き方
 ```
 

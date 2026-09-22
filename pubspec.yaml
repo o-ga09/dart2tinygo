@@ -17,3 +17,4 @@ workspace:
   - examples/hello_wioterminal
   - examples/blinky
   - examples/button_led
+  - examples/wioterminal_demo
