@@ -2,7 +2,7 @@ name: dart2tinygo
 description: >-
   Transpiles a subset of Dart into TinyGo source code so it can run on
   microcontrollers. CLI (`dart2tinygo build/check`) plus the conversion engine.
-version: 0.0.1
+version: 0.0.2
 repository: https://github.com/o-ga09/dart2tinygo
 issue_tracker: https://github.com/o-ga09/dart2tinygo/issues
 topics:
@@ -28,4 +28,4 @@ dev_dependencies:
   # Board-agnostic fake binding for golden/checker tests; the core itself
   # never depends on a real board package. Resolved in-tree by the workspace
   # (it is never published).
-  test_binding: ^0.0.1
+  test_binding: ^0.0.2
