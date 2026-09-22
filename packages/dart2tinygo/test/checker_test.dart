@@ -149,7 +149,7 @@ void main() {
       expect(errors.single.reason, contains('block'));
     });
 
-    test('reports while nested inside if as out of scope', () async {
+    test('accepts while nested inside if (loop nesting, see #8)', () async {
       final errors = await checkSource('''
 void main() {
   if (true) {
@@ -159,8 +159,7 @@ void main() {
   }
 }
 ''');
-      expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('WhileStatement'));
+      expect(errors, isEmpty);
     });
   });
 
@@ -256,6 +255,260 @@ void main() {
       expect(errors, hasLength(1));
       expect(errors.single.line, 2);
       expect(errors.single.reason, contains('"+"'));
+    });
+  });
+
+  group('while loops', () {
+    test('accepts a general bool condition', () async {
+      final errors = await checkSource('''
+void main() {
+  var count = 0;
+  while (count < 10) {
+    count++;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts nested while loops', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  while (i < 3) {
+    var j = 0;
+    while (j < 3) {
+      j++;
+    }
+    i++;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a non-bool condition', () async {
+      final errors = await checkSource('''
+void main() {
+  var count = 0;
+  while (count) {
+    count++;
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('bool'));
+    });
+  });
+
+  group('for loops', () {
+    test('accepts a C-style for loop with a += updater', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var y = 0; y < 240; y += 20) {
+    print('\$y');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a C-style for loop with a ++ updater, nested in while',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  while (true) {
+    for (var i = 0; i < 10; i++) {
+      print('\$i');
+    }
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a for loop without a condition', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var i = 0;; i++) {
+    print('\$i');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('condition'));
+    });
+
+    test('reports a for loop whose initializer is not a declaration', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  for (i = 0; i < 10; i++) {
+    print('\$i');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('declare'));
+    });
+
+    test('reports a for loop with more than one declared variable', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var i = 0, j = 10; i < j; i++) {
+    print('\$i');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('exactly one variable'));
+    });
+
+    test('reports a for loop with more than one updater', () async {
+      final errors = await checkSource('''
+void main() {
+  var j = 10;
+  for (var i = 0; i < j; i++, j--) {
+    print('\$i');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('exactly one updater'));
+    });
+
+    test('reports a for-in loop', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var x in [1, 2, 3]) {
+    print('\$x');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('for-in'));
+    });
+
+    test('reports a for-loop body without a block', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var i = 0; i < 10; i++) print('\$i');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('block'));
+    });
+  });
+
+  group('break and continue', () {
+    test('accepts break inside a while loop', () async {
+      final errors = await checkSource('''
+void main() {
+  while (true) {
+    break;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts continue inside a for loop', () async {
+      final errors = await checkSource('''
+void main() {
+  for (var i = 0; i < 10; i++) {
+    continue;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts break/continue inside if nested in a loop', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  while (i < 10) {
+    if (i == 5) {
+      break;
+    } else {
+      continue;
+    }
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports break outside a loop', () async {
+      final errors = await checkSource('''
+void main() {
+  break;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('outside'));
+    });
+
+    test('reports continue outside a loop, even inside if', () async {
+      final errors = await checkSource('''
+void main() {
+  if (true) {
+    continue;
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('outside'));
+    });
+  });
+
+  group('compound assignment', () {
+    test('accepts += -= *= /= on matching int/double locals', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  i += 1;
+  i -= 1;
+  i *= 2;
+  i /= 2;
+  var x = 1.0;
+  x += 0.5;
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a compound assignment with a mismatched rhs type', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  i += 1.5;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int'));
+    });
+
+    test('reports a compound assignment on a bool local', () async {
+      final errors = await checkSource('''
+void main() {
+  var ready = true;
+  ready += true;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int/double'));
+    });
+
+    test('reports an unsupported assignment operator', () async {
+      final errors = await checkSource('''
+void main() {
+  var i = 0;
+  i %= 2;
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('"%="'));
     });
   });
 

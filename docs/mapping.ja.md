@@ -15,8 +15,11 @@
 | --- | --- |
 | `void main() { ... }` | `func main() { ... }` |
 | `var x = <int リテラル>;` | `x := <int リテラル>` |
-| `while (true) { ... }` | `for { ... }` |
-| `x++` / `x--` | `x++` / `x--` |
+| `while (true) { ... }` | `for { ... }`（一般の `while (cond)` は `for cond { ... }`） |
+| `for (var i = <初期値>; cond; updater) { ... }` | `for i := <初期値>; cond; updater { ... }` — そのまま対応。宣言する変数1つ、条件1つ、updater1つに限定（Go の post-clause は単一の文のため） |
+| `break` / `continue` | `break` / `continue` — ラベルなしのみ |
+| `x++` / `x--` | `x++` / `x--`（int のみ） |
+| `x += y` / `x -= y` / `x *= y` / `x /= y` | Go でも同じ記号。`x`/`y` は同じ型（`int` か `double`）でなければならない |
 | `print(<文字列>)` | `println(<文字列>)` — `fmt.Println` ではない（TinyGo で `fmt` を巻き込まないため） |
 | `print('... $x ...')` | 文字列連結：`"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)`（`seconds`/`minutes`/`hours`/`days`/`microseconds` にも対応。複数指定時は加算） |
@@ -73,7 +76,8 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） | 決定（v0.2） |
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 | 決定 |
 | `if` / `else if` / `else` | そのまま対応。各分岐は必ずブロック（上の v0.1 の表を参照） | 実装済 |
-| `while`（一般条件）/ `for (;;)` / `for-in` / `switch` / `break` / `continue` | そのまま対応。`for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
+| `while`（一般条件）/ `for`（宣言変数1つ、updater1つ）/ `break` / `continue` | そのまま対応。上の v0.1 の表を参照 | 実装済 |
+| `for-in` / `switch` | `for-in` → `range`。Dart の `switch` は fallthrough しないので出力もしない | 決定 |
 | カスケード `a..b()..c()` | 一時変数 + 文の列 | 決定 |
 | `@GoType` クラス | 注釈に書いた Go 型式をそのまま | 実装済 |
 | 継承・mixin・ジェネリクス・`T?`・`throw`/例外・`async` | checker が拒否 | 決定（将来） |

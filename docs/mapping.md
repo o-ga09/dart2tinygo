@@ -14,8 +14,11 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 | --- | --- |
 | `void main() { ... }` | `func main() { ... }` |
 | `var x = <int literal>;` | `x := <int literal>` |
-| `while (true) { ... }` | `for { ... }` |
-| `x++` / `x--` | `x++` / `x--` |
+| `while (true) { ... }` | `for { ... }` (a general `while (cond)` becomes `for cond { ... }`) |
+| `for (var i = <init>; cond; updater) { ... }` | `for i := <init>; cond; updater { ... }` — direct; exactly one declared loop variable, one condition, one updater (Go's post-clause is a single statement) |
+| `break` / `continue` | `break` / `continue` — unlabeled only |
+| `x++` / `x--` | `x++` / `x--` (int only) |
+| `x += y` / `x -= y` / `x *= y` / `x /= y` | same tokens in Go; `x`/`y` must have the same type, `int` or `double` |
 | `print(<string>)` | `println(<string>)` — not `fmt.Println`, to avoid pulling in `fmt` on TinyGo |
 | `print('... $x ...')` | string concatenation: `"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)` (also supports `seconds`/`minutes`/`hours`/`days`/`microseconds`, summed when combined) |
@@ -75,7 +78,8 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker | decided |
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
-| `while` (general condition) / `for (;;)` / `for-in` / `switch` / `break` / `continue` | direct; `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
+| `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
+| `for-in` / `switch` | `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
 | cascade `a..b()..c()` | temporary + statement sequence | decided |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |
 | inheritance, mixins, generics, `T?`, `throw`/exceptions, `async` | rejected by the checker | decided (future) |

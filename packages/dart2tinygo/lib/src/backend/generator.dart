@@ -96,11 +96,26 @@ void _writeStatement(
       }
 
     case WhileStatement():
-      out.writeln('${indent}for {');
+      final condition = statement.condition;
+      // `while (true)` is idiomatic Go's bare `for {`; any other condition
+      // becomes `for <cond> {`, which is Go's "while" form.
+      final isBareTrue = condition is BooleanLiteral && condition.value == true;
+      out.writeln(isBareTrue
+          ? '${indent}for {'
+          : '${indent}for ${_writeExpression(condition, deps)} {');
       for (final inner in (statement.body as Block).statements) {
         _writeStatement(inner, out, deps, indent: '$indent\t');
       }
       out.writeln('$indent}');
+
+    case ForStatement():
+      _writeForStatement(statement, out, deps, indent: indent);
+
+    case BreakStatement():
+      out.writeln('${indent}break');
+
+    case ContinueStatement():
+      out.writeln('${indent}continue');
 
     case ExpressionStatement():
       _writeExpressionStatement(statement.expression, out, deps,
@@ -160,15 +175,37 @@ void _writeElseBranch(
   out.writeln('$indent}');
 }
 
+/// `for (var i = <init>; <cond>; <updater>) { ... }` maps 1:1 onto Go's own
+/// C-style `for`, which has the same three-clause shape (the checker limits
+/// Dart's more permissive form — multiple declarations, multiple updaters,
+/// a reused loop variable — to what Go's syntax can express directly).
+void _writeForStatement(
+  ForStatement statement,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  final parts = statement.forLoopParts as ForPartsWithDeclarations;
+  final variable = parts.variables.variables.single;
+  final init = '${variable.name.lexeme} := '
+      '${_writeExpression(variable.initializer!, deps)}';
+  final condition = _writeExpression(parts.condition!, deps);
+  final updater = _writeUpdaterExpression(parts.updaters.single, deps);
+  out.writeln('$indent' 'for $init; $condition; $updater {');
+  for (final inner in (statement.body as Block).statements) {
+    _writeStatement(inner, out, deps, indent: '$indent\t');
+  }
+  out.writeln('$indent}');
+}
+
 void _writeExpressionStatement(
   Expression expression,
   StringBuffer out,
   GoDeps deps, {
   required String indent,
 }) {
-  if (expression is PostfixExpression) {
-    final target = (expression.operand as SimpleIdentifier).name;
-    out.writeln('$indent$target${expression.operator.lexeme}');
+  if (expression is PostfixExpression || expression is AssignmentExpression) {
+    out.writeln('$indent${_writeUpdaterExpression(expression, deps)}');
     return;
   }
 
@@ -202,6 +239,23 @@ void _writeExpressionStatement(
     '${expression.runtimeType}. This is a bug: checkEntryPoint() should '
     'have rejected it first.',
   );
+}
+
+/// A for-loop updater or a compound-assignment statement: `x++`/`x--` map
+/// onto the same Go postfix operators, and `x += y` (`+=`/`-=`/`*=`/`/=`)
+/// onto Go's identical compound-assignment tokens. Recorded in
+/// `docs/mapping.md`.
+String _writeUpdaterExpression(Expression expression, GoDeps deps) {
+  if (expression is PostfixExpression) {
+    final target = (expression.operand as SimpleIdentifier).name;
+    return '$target${expression.operator.lexeme}';
+  }
+  if (expression is AssignmentExpression) {
+    final target = (expression.leftHandSide as SimpleIdentifier).name;
+    final rhs = _writeExpression(expression.rightHandSide, deps);
+    return '$target ${expression.operator.lexeme} $rhs';
+  }
+  throw StateError('unchecked updater expression: ${expression.runtimeType}');
 }
 
 /// `print(x)` takes any `String` expression; interpolation is concatenated

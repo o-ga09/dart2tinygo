@@ -13,10 +13,13 @@ Any PR that adds a language feature must update this table.
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
-| `while` | Implemented (minimal: `while (true)` only, no nesting) |
-| `if` / `else if` / `else` | Implemented (block-bodied branches; may nest inside `while` and inside other `if`, but not the other way around — `while` still can't nest) |
+| `while` | Implemented (any `bool` condition, e.g. `while (count < 10)`; nesting allowed) |
+| `for` (C-style) | Implemented (`for (var i = <init>; cond; updater)`; exactly one declared loop variable and one updater — Go's post-clause is a single statement; `for-in` not implemented) |
+| `break` / `continue` | Implemented (unlabeled only) |
+| `x += y` / `-=` / `*=` / `/=` | Implemented (`int`/`int` or `double`/`double` only) |
+| `if` / `else if` / `else` | Implemented (block-bodied branches; loops and `if` may nest freely) |
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
-| `for` / `switch` | Not implemented |
+| `switch` | Not implemented |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
 | String interpolation | Implemented for `int` / `bool` / `String` expressions; `double` not implemented |
 | Cascade `..` | Not implemented |

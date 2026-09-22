@@ -25,12 +25,13 @@ class UnsupportedSyntaxError {
 }
 
 /// v0.1 minimal scope only: a single `void main()` containing
-/// `int`/`double`/`bool`/`String` locals, `while (true)`, `if`/`else if`/
-/// `else`, comparison (`==`/`!=`/`</`<=`/`>`/`>=`) and logical (`&&`/`||`/
-/// `!`) operators, `print(...)`, `sleep(Duration(...))`, and calls into
-/// annotation bindings (`@GoImport` / `@GoName` / `@GoType`, see
-/// `docs/writing_bindings.md`). Everything else is reported here, up front,
-/// rather than discovered mid-conversion.
+/// `int`/`double`/`bool`/`String` locals, `while (cond)`, a single-variable
+/// C-style `for`, `break`/`continue`, `if`/`else if`/`else`, comparison
+/// (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`/`!`), and compound
+/// assignment (`+=`/`-=`/`*=`/`/=`) operators, `print(...)`,
+/// `sleep(Duration(...))`, and calls into annotation bindings (`@GoImport` /
+/// `@GoName` / `@GoType`, see `docs/writing_bindings.md`). Everything else
+/// is reported here, up front, rather than discovered mid-conversion.
 List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   final errors = <UnsupportedSyntaxError>[];
   final unit = result.unit;
@@ -81,16 +82,20 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   }
 
   for (final statement in body.block.statements) {
-    errors.addAll(_checkStatement(result, statement, allowWhile: true));
+    errors.addAll(_checkStatement(result, statement, insideLoop: false));
   }
 
   return errors;
 }
 
+/// [insideLoop] tracks whether [statement] is (directly or via `if`) inside
+/// a `while`/`for` body, which is all `break`/`continue` need to know:
+/// loops themselves may nest freely, so unlike the old "no nested loops"
+/// restriction this is no longer a gate on `while`/`for` — see #8.
 List<UnsupportedSyntaxError> _checkStatement(
   ResolvedUnitResult result,
   Statement statement, {
-  required bool allowWhile,
+  required bool insideLoop,
 }) {
   final errors = <UnsupportedSyntaxError>[];
 
@@ -127,30 +132,32 @@ List<UnsupportedSyntaxError> _checkStatement(
     case ExpressionStatement():
       errors.addAll(_checkExpressionStatement(result, statement));
 
-    case WhileStatement() when allowWhile:
-      final condition = statement.condition;
-      if (condition is! BooleanLiteral || condition.value != true) {
-        errors.add(
-          _error(
-            result,
-            condition.offset,
-            'only "while (true)" is supported in v0.1 minimal scope',
-          ),
-        );
-      }
+    case WhileStatement():
+      errors.addAll(_checkBoolCondition(result, statement.condition, 'while'));
       final body = statement.body;
       if (body is! Block) {
         errors.add(
             _error(result, body.offset, 'while body must be a block: { ... }'));
       } else {
         for (final inner in body.statements) {
-          // Nested loops are out of scope for the minimal transpile.
-          errors.addAll(_checkStatement(result, inner, allowWhile: false));
+          errors.addAll(_checkStatement(result, inner, insideLoop: true));
         }
       }
 
+    case ForStatement():
+      errors.addAll(_checkForStatement(result, statement));
+
+    case BreakStatement():
+      errors.addAll(_checkLoopJump(result, statement,
+          statement.breakKeyword.lexeme, statement.label, insideLoop));
+
+    case ContinueStatement():
+      errors.addAll(_checkLoopJump(result, statement,
+          statement.continueKeyword.lexeme, statement.label, insideLoop));
+
     case IfStatement():
-      errors.addAll(_checkIfStatement(result, statement));
+      errors
+          .addAll(_checkIfStatement(result, statement, insideLoop: insideLoop));
 
     default:
       errors.add(
@@ -158,8 +165,8 @@ List<UnsupportedSyntaxError> _checkStatement(
           result,
           statement.offset,
           '"${_statementLabel(statement)}" is not supported in v0.1 minimal '
-          'scope (only locals, while (true), if/else if/else, print(...), '
-          'sleep(...), and binding calls)',
+          'scope (only locals, while/for, break/continue, if/else if/else, '
+          'print(...), sleep(...), and binding calls)',
         ),
       );
   }
@@ -167,34 +174,268 @@ List<UnsupportedSyntaxError> _checkStatement(
   return errors;
 }
 
+List<UnsupportedSyntaxError> _checkLoopJump(
+  ResolvedUnitResult result,
+  Statement statement,
+  String keyword,
+  SimpleIdentifier? label,
+  bool insideLoop,
+) {
+  if (label != null) {
+    return [
+      _error(result, statement.offset,
+          'labeled "$keyword" is not supported in v0.1 minimal scope'),
+    ];
+  }
+  if (!insideLoop) {
+    return [
+      _error(
+          result, statement.offset, '"$keyword" outside of a while/for loop'),
+    ];
+  }
+  return const [];
+}
+
+/// `for (var i = <init>; <cond>; <updater>) { ... }`: v0.1 minimal scope
+/// only covers the C-style form with exactly one declared loop variable, a
+/// required condition, and exactly one updater — the shape Go's own `for`
+/// syntax can represent directly (Go's post-clause is a single simple
+/// statement, unlike Dart/C's comma-separated updater list). `for-in` and
+/// `for (i = 0; ...; ...)` (reusing an existing variable) are out of scope.
+List<UnsupportedSyntaxError> _checkForStatement(
+  ResolvedUnitResult result,
+  ForStatement statement,
+) {
+  final parts = statement.forLoopParts;
+  if (parts is! ForPartsWithDeclarations) {
+    final reason = parts is ForEachParts
+        ? 'for-in loops are not supported in v0.1 minimal scope'
+        : 'a for-loop initializer must declare the loop variable (e.g. '
+            '"for (var i = 0; ...)"), reusing an existing variable is not '
+            'supported in v0.1 minimal scope';
+    return [_error(result, parts.offset, reason)];
+  }
+
+  final errors = <UnsupportedSyntaxError>[];
+
+  final declared = parts.variables.variables;
+  if (declared.length != 1) {
+    errors.add(
+      _error(
+        result,
+        parts.variables.offset,
+        'a for-loop initializer must declare exactly one variable in v0.1 '
+        'minimal scope',
+      ),
+    );
+  }
+  for (final variable in declared) {
+    final initializer = variable.initializer;
+    if (initializer == null) {
+      errors.add(
+        _error(
+          result,
+          variable.offset,
+          'for-loop variable "${variable.name.lexeme}" must have an '
+          'initializer',
+        ),
+      );
+      continue;
+    }
+    final type = variable.declaredFragment?.element.type;
+    if (!_isSupportedType(type)) {
+      errors.add(
+        _error(
+          result,
+          variable.offset,
+          'for-loop variable "${variable.name.lexeme}" has type '
+          '"${type?.getDisplayString() ?? '?'}", but only '
+          '$_supportedTypesLabel locals are supported',
+        ),
+      );
+      continue;
+    }
+    errors.addAll(_checkExpression(result, initializer));
+  }
+
+  final condition = parts.condition;
+  if (condition == null) {
+    errors.add(
+      _error(
+        result,
+        parts.leftSeparator.offset,
+        'a for-loop must have a condition in v0.1 minimal scope (an '
+        'infinite for-loop is not supported; use while (true) instead)',
+      ),
+    );
+  } else {
+    errors.addAll(_checkBoolCondition(result, condition, 'for-loop'));
+  }
+
+  final updaters = parts.updaters;
+  if (updaters.length != 1) {
+    errors.add(
+      _error(
+        result,
+        parts.rightSeparator.offset,
+        'a for-loop must have exactly one updater in v0.1 minimal scope '
+        '(Go\'s for-statement only allows a single post-clause statement)',
+      ),
+    );
+  } else {
+    errors.addAll(_checkUpdaterExpression(result, updaters.single));
+  }
+
+  final body = statement.body;
+  if (body is! Block) {
+    errors.add(
+        _error(result, body.offset, 'for-loop body must be a block: { ... }'));
+  } else {
+    for (final inner in body.statements) {
+      errors.addAll(_checkStatement(result, inner, insideLoop: true));
+    }
+  }
+
+  return errors;
+}
+
+/// A `while`/`for-loop` condition must be a `bool` expression the generator
+/// can emit verbatim, exactly like an `if` condition.
+List<UnsupportedSyntaxError> _checkBoolCondition(
+  ResolvedUnitResult result,
+  Expression condition,
+  String contextLabel,
+) {
+  final errors = _checkExpression(result, condition);
+  if (errors.isNotEmpty) return errors;
+  final type = condition.staticType;
+  if (type == null || !type.isDartCoreBool) {
+    return [
+      _error(
+        result,
+        condition.offset,
+        '$contextLabel condition has type "${type?.getDisplayString() ?? '?'}", '
+        'but must be a bool expression',
+      ),
+    ];
+  }
+  return const [];
+}
+
+/// A for-loop updater or a compound-assignment statement: `x++`/`x--` on an
+/// `int` local, or `x += y` (`+=`/`-=`/`*=`/`/=`) on a matching `int`/`int`
+/// or `double`/`double` local/value pair.
+List<UnsupportedSyntaxError> _checkUpdaterExpression(
+  ResolvedUnitResult result,
+  Expression expression,
+) {
+  if (expression is PostfixExpression &&
+      (expression.operator.lexeme == '++' ||
+          expression.operator.lexeme == '--')) {
+    final type = expression.staticType;
+    if (type == null || !type.isDartCoreInt) {
+      return [
+        _error(
+          result,
+          expression.offset,
+          '"${expression.operator.lexeme}" is only supported on int locals',
+        ),
+      ];
+    }
+    return const [];
+  }
+  if (expression is AssignmentExpression) {
+    return _checkCompoundAssignment(result, expression);
+  }
+  return [
+    _error(
+      result,
+      expression.offset,
+      '"${_expressionLabel(expression)}" is not a supported for-loop '
+      'updater or statement in v0.1 minimal scope (only x++/x--/x+=.../'
+      'binding calls)',
+    ),
+  ];
+}
+
+const _compoundAssignmentOperators = {'+=', '-=', '*=', '/='};
+
+List<UnsupportedSyntaxError> _checkCompoundAssignment(
+  ResolvedUnitResult result,
+  AssignmentExpression expression,
+) {
+  final op = expression.operator.lexeme;
+  if (!_compoundAssignmentOperators.contains(op)) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'assignment operator "$op" is not supported in v0.1 minimal scope '
+        '(only +=/-=/*=//=)',
+      ),
+    ];
+  }
+
+  final target = expression.leftHandSide;
+  if (target is! SimpleIdentifier ||
+      expression.readElement is! LocalVariableElement) {
+    return [
+      _error(result, target.offset, '"$op" target must be a local variable'),
+    ];
+  }
+  // A compound-assignment target is read, not written, at its own AST
+  // position, so its type lives on the expression as a
+  // `CompoundAssignmentExpression` (`readType`), not on `target.staticType`
+  // (which the analyzer leaves `null` for a write-only reference).
+  final targetType = expression.readType;
+  if (targetType == null ||
+      !(targetType.isDartCoreInt || targetType.isDartCoreDouble)) {
+    return [
+      _error(
+        result,
+        target.offset,
+        '"$op" is only supported on int/double locals, got '
+        '"${targetType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+
+  final rhs = expression.rightHandSide;
+  final rhsErrors = _checkExpression(result, rhs);
+  if (rhsErrors.isNotEmpty) return rhsErrors;
+  final rhsType = rhs.staticType;
+  final matches = rhsType != null &&
+      ((targetType.isDartCoreInt && rhsType.isDartCoreInt) ||
+          (targetType.isDartCoreDouble && rhsType.isDartCoreDouble));
+  if (!matches) {
+    return [
+      _error(
+        result,
+        rhs.offset,
+        '"$op" requires the right-hand side to have the same type as the '
+        'target ("${targetType.getDisplayString()}"), got '
+        '"${rhsType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
 /// `if (cond) { ... } else if (cond2) { ... } else { ... }`: the condition
 /// must be a `bool` expression the generator can emit as-is, and every
 /// branch must be a block. `else if` is Dart's own `elseStatement` being
 /// another `IfStatement`, so the else-if chain falls out of recursing on it
-/// here. Nested loops stay out of scope even under `if`
-/// (`allowWhile: false`), matching the restriction on `while` above.
+/// here. [insideLoop] passes through unchanged: `if` neither enters nor
+/// leaves a loop, so `break`/`continue` stay exactly as legal inside its
+/// branches as they were outside them.
 List<UnsupportedSyntaxError> _checkIfStatement(
   ResolvedUnitResult result,
-  IfStatement statement,
-) {
-  final errors = <UnsupportedSyntaxError>[];
-
-  final condition = statement.expression;
-  final conditionErrors = _checkExpression(result, condition);
-  errors.addAll(conditionErrors);
-  if (conditionErrors.isEmpty) {
-    final type = condition.staticType;
-    if (type == null || !type.isDartCoreBool) {
-      errors.add(
-        _error(
-          result,
-          condition.offset,
-          'if condition has type "${type?.getDisplayString() ?? '?'}", but '
-          'must be a bool expression',
-        ),
-      );
-    }
-  }
+  IfStatement statement, {
+  required bool insideLoop,
+}) {
+  final errors = <UnsupportedSyntaxError>[
+    ..._checkBoolCondition(result, statement.expression, 'if'),
+  ];
 
   final then = statement.thenStatement;
   if (then is! Block) {
@@ -202,17 +443,18 @@ List<UnsupportedSyntaxError> _checkIfStatement(
         .add(_error(result, then.offset, 'if branch must be a block: { ... }'));
   } else {
     for (final inner in then.statements) {
-      errors.addAll(_checkStatement(result, inner, allowWhile: false));
+      errors.addAll(_checkStatement(result, inner, insideLoop: insideLoop));
     }
   }
 
   final elseStatement = statement.elseStatement;
   if (elseStatement is IfStatement) {
     // `else if (...) { ... }`.
-    errors.addAll(_checkIfStatement(result, elseStatement));
+    errors.addAll(
+        _checkIfStatement(result, elseStatement, insideLoop: insideLoop));
   } else if (elseStatement is Block) {
     for (final inner in elseStatement.statements) {
-      errors.addAll(_checkStatement(result, inner, allowWhile: false));
+      errors.addAll(_checkStatement(result, inner, insideLoop: insideLoop));
     }
   } else if (elseStatement != null) {
     errors.add(
@@ -249,6 +491,10 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
     return const [];
   }
 
+  if (expression is AssignmentExpression) {
+    return _checkCompoundAssignment(result, expression);
+  }
+
   if (expression is MethodInvocation) {
     if (expression.target == null) {
       switch (expression.methodName.name) {
@@ -270,8 +516,8 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
       result,
       expression.offset,
       'expression "${_expressionLabel(expression)}" is not supported in '
-      'v0.1 minimal scope (only x++/x--, print(...), sleep(...), and '
-      'binding calls)',
+      'v0.1 minimal scope (only x++/x--, x+=.../-=/*=//=, print(...), '
+      'sleep(...), and binding calls)',
     ),
   ];
 }
