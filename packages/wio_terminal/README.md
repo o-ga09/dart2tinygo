@@ -57,6 +57,13 @@ Currently provided:
 | `WiFi.ipAddress()` | `(*WiFi).IPAddress()` | The assigned IPv4 address, or `''` if not connected |
 | `WiFi.httpGet(url)` / `.httpPost(url, contentType, body)` | `(*WiFi).HttpGet(url)` / `.HttpPost(...)` | Simple HTTP requests (via `net/http`), response body as text |
 
+`lib/pins.dart` (`import 'package:wio_terminal/pins.dart';`) provides the 40-pin header / Grove port pin assignments, sharing `tinygo_machine`'s own `Pin` type (so `WioPins.d0` works directly with `tinygo_machine`'s `configure`/`high`/`low`/`newAdc`/`newPwm`):
+
+| Dart | Go | Purpose |
+| --- | --- | --- |
+| `WioPins.d0`...`.d8` | `wio.D0`...`D8` | The digital pins of the 40-pin header (and the Grove digital port, `D0`/`D1`) |
+| `WioPins.a0`...`.a8` | `wio.A0`...`A8` | The analog pins of the 40-pin header (and the Grove analog port, `A0`/`A1`) |
+
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 
 This package lives in the main repository for now so the example builds from a

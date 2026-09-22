@@ -57,6 +57,13 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `WiFi.ipAddress()` | `(*WiFi).IPAddress()` | 割り当てられたIPv4アドレス（未接続時は`''`） |
 | `WiFi.httpGet(url)` / `.httpPost(url, contentType, body)` | `(*WiFi).HttpGet(url)` / `.HttpPost(...)` | `net/http` 経由のシンプルなHTTPリクエスト、レスポンスボディをテキストで返す |
 
+`lib/pins.dart`（`import 'package:wio_terminal/pins.dart';`）は40ピンヘッダー／Groveポートのピン割り当てを提供する。`tinygo_machine` 自身の `Pin` 型を共有しているため、`WioPins.d0` はそのまま `tinygo_machine` の `configure`/`high`/`low`/`newAdc`/`newPwm` で使える：
+
+| Dart | Go | 用途 |
+| --- | --- | --- |
+| `WioPins.d0`...`.d8` | `wio.D0`...`D8` | 40ピンヘッダーのデジタルピン（Groveデジタルポート `D0`/`D1` も含む） |
+| `WioPins.a0`...`.a8` | `wio.A0`...`A8` | 40ピンヘッダーのアナログピン（Groveアナログポート `A0`/`A1` も含む） |
+
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 
 サンプルがチェックアウトからビルドできるよう、当面このパッケージは本リポジトリに置いています。

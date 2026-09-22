@@ -146,6 +146,37 @@ by which sub-package is imported — confirmed end to end (`dart2tinygo build`
 `go/` (its main package). An example that only imports the main library
 never triggers the sub-package's cgo compilation at all.
 
+## Sharing a `@GoType` across binding packages (decided, 2026-09-22)
+
+A binding can return another binding's `@GoType` — e.g. `wio_terminal`'s
+40-pin-header pin constants (#22) return `tinygo_machine`'s own `Pin`, so a
+value like `WioPins.d0` works directly with `tinygo_machine`'s
+`configure`/`high`/`low`/`newAdc`/`newPwm`, rather than `wio_terminal`
+inventing its own incompatible pin type. This needed no annotation changes
+and, on the Dart-resolution side, no core changes either:
+
+- `isGoType`/`goTypeOf` look at the referenced Dart *class's own* metadata,
+  regardless of which library declared the `external` member that returns
+  or accepts it — so a `wio_terminal` getter returning `tinygo_machine`'s
+  `Pin` type checks out unconditionally.
+- The backend's own type-emission (`_writeType` and friends) resolves a
+  `@GoType`'s Go import from *that class's declaring library*, not from the
+  call site's library, and registers it as a used import — so the generated
+  file's import block always ends up correct (both `tgm` and `wio`, in the
+  example above) without the binding author doing anything.
+
+The one real gap was at the Go module-graph level, not the Dart side: the
+Go implementation behind `WioPins.d0` (`wio_terminal/go/pins.go`) has to
+declare `var D0 = tgm.Pin(machine.D0)`, which means `wio_terminal/go` itself
+now needs `tinygo_machine/go` as a dependency, replaced to the local
+checkout the same way an example's own generated `go.mod` replaces
+`wio_terminal/go` — see "Splitting a heavy dependency" above for why a
+`replace` in a *dependency's* own `go.mod` doesn't reach the final build on
+its own, and how `dart2tinygo build`/`flash` now closes that gap
+(`localModuleReplacesOf` in `frontend/bindings.dart`, walked transitively by
+`_withTransitiveLocalModules` in `bin/dart2tinygo.dart`). Confirmed end to
+end for `wio_terminal/go/pins.go` depending on `tinygo_machine/go`.
+
 ## Shipping the Go runtime with the binding
 
 Put the Go module in a `go/` directory next to the binding's `pubspec.yaml` (module path = repository path of that directory, e.g. `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`). When the transpiler sees a binding whose package has `go/go.mod`, it emits
@@ -164,3 +195,5 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 - `packages/wio_terminal`: Seeed Wio Terminal (LCD text). Used by `examples/hello_wioterminal`.
 - `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`), ADC (`newAdc` / `read`), and PWM (`newPwm` / `setDuty`) implemented (#21, #44). Used by `examples/blinky`.
 - `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD (FAT) binding, split into its own Go sub-package/Dart library per the section above (#19).
+- `packages/wio_terminal/lib/wifi.dart` + `go/wifi`: Wi-Fi (RTL8720DN) + HTTP binding, same split (#20).
+- `packages/wio_terminal/lib/pins.dart`: 40-pin-header/Grove pin constants, sharing `tinygo_machine`'s `Pin` type per the section above (#22).
