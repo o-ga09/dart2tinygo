@@ -48,6 +48,15 @@ Currently provided:
 | `SdCard.readText(path)` / `.writeText(path, text)` / `.appendText(path, text)` | `(*SdCard).ReadText(path)` / `.WriteText(...)` / `.AppendText(...)` | Text file I/O (`''` on a failed read) |
 | `SdCard.readBytes(path)` / `.writeBytes(path, data)` | `(*SdCard).ReadBytes(path)` / `.WriteBytes(...)` | Byte file I/O (`List<int>` / `[]byte`) |
 
+`lib/wifi.dart` (`import 'package:wio_terminal/wifi.dart';`) provides the Wi-Fi binding, likewise kept out of `wio_terminal.dart` so a program that doesn't use it doesn't pull `net/http` and the RTL8720DN driver into its build. Requires RTL8720DN firmware 2.1.2+; building a program that calls `httpGet`/`httpPost` needs `tinygo build`/`tinygo flash -stack-size=4KB` (a larger goroutine stack than the default):
+
+| Dart | Go | Purpose |
+| --- | --- | --- |
+| `newWiFi()` | `wiowifi.NewWiFi()` | Probe and initialize the RTL8720DN |
+| `WiFi.connect(ssid, password)` / `.isConnected()` / `.disconnect()` | `(*WiFi).Connect(...)` / `.IsConnected()` / `.Disconnect()` | Join/leave an access point |
+| `WiFi.ipAddress()` | `(*WiFi).IPAddress()` | The assigned IPv4 address, or `''` if not connected |
+| `WiFi.httpGet(url)` / `.httpPost(url, contentType, body)` | `(*WiFi).HttpGet(url)` / `.HttpPost(...)` | Simple HTTP requests (via `net/http`), response body as text |
+
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 
 This package lives in the main repository for now so the example builds from a

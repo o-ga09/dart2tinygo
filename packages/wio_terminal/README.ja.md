@@ -48,6 +48,15 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `SdCard.readText(path)` / `.writeText(path, text)` / `.appendText(path, text)` | `(*SdCard).ReadText(path)` / `.WriteText(...)` / `.AppendText(...)` | テキストファイルの読み書き（読み取り失敗時は `''`） |
 | `SdCard.readBytes(path)` / `.writeBytes(path, data)` | `(*SdCard).ReadBytes(path)` / `.WriteBytes(...)` | バイト列の読み書き（`List<int>` / `[]byte`） |
 
+`lib/wifi.dart`（`import 'package:wio_terminal/wifi.dart';`）はWi-Fiバインディングを提供する。こちらも `wio_terminal.dart` には含めず分離しているのは、使わないプログラムまで `net/http` とRTL8720DNドライバを巻き込まないようにするため。RTL8720DNファームウェア2.1.2以降が必要。`httpGet`/`httpPost` を呼ぶプログラムをビルドするには `tinygo build`/`tinygo flash -stack-size=4KB`（デフォルトより大きいgoroutineスタック）が必要：
+
+| Dart | Go | 用途 |
+| --- | --- | --- |
+| `newWiFi()` | `wiowifi.NewWiFi()` | RTL8720DNをプローブして初期化 |
+| `WiFi.connect(ssid, password)` / `.isConnected()` / `.disconnect()` | `(*WiFi).Connect(...)` / `.IsConnected()` / `.Disconnect()` | アクセスポイントへの接続/切断 |
+| `WiFi.ipAddress()` | `(*WiFi).IPAddress()` | 割り当てられたIPv4アドレス（未接続時は`''`） |
+| `WiFi.httpGet(url)` / `.httpPost(url, contentType, body)` | `(*WiFi).HttpGet(url)` / `.HttpPost(...)` | `net/http` 経由のシンプルなHTTPリクエスト、レスポンスボディをテキストで返す |
+
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 
 サンプルがチェックアウトからビルドできるよう、当面このパッケージは本リポジトリに置いています。
