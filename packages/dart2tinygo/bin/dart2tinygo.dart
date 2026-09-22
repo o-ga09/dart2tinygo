@@ -91,7 +91,7 @@ class BuildCommand extends Command<int> {
       return 1;
     }
 
-    final generated = generateGoFile(result);
+    final generated = await generateGoFile(result);
     final formatted = await _gofmt(generated.source);
 
     final outDirAbs = Directory(outDir)..createSync(recursive: true);

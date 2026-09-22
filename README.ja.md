@@ -69,6 +69,15 @@ tinygo flash -target=wioterminal .
 `@GoImport` / `@GoName` / `@GoType` を付けた素の Dart 宣言で、トランスパイラ本体は
 ボードのことを何も知りません。[バインディングの作り方](./docs/writing_bindings.ja.md) を参照してください。
 
+## 数値の意味論
+
+`int` は Go の `int` に対応し、**プラットフォーム幅**です：デスクトップでは 64bit
+ですが、Wio Terminal の SAMD51 のような 32bit マイコンでは 32bit になり、
+オーバーフロー時は 32bit で桁あふれします。Flutter のモバイル/デスクトップと
+Flutter Web でコードを共有したことがあれば、これは dart2js 利用者が既に知っている
+のと同じトレードオフです — dart2js のビット演算も同じ理由で 32bit になります。
+詳しい根拠は [`docs/mapping.ja.md`](./docs/mapping.ja.md) の「数値の意味論」を参照してください。
+
 ## リポジトリ構成
 
 ```
