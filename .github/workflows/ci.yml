@@ -71,6 +71,14 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (int_arithmetic)
         working-directory: /tmp/dart2tinygo-arith-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises dartrt.FormatDouble and math.Round (double arithmetic,
+      # .toDouble()/.toInt()/.round()).
+      - name: dart2tinygo build (double_conversion golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/double_conversion.dart -o /tmp/dart2tinygo-double-out
+      - name: tinygo build -target=${{ matrix.target }} (double_conversion)
+        working-directory: /tmp/dart2tinygo-double-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'

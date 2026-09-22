@@ -8,25 +8,29 @@ Any PR that adds a language feature must update this table.
 
 | Feature | Status |
 | --- | --- |
-| Types: `int` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment) |
-| Types: `double` / `bool` / `String` | Partial: locals, literals, binding results/arguments, and (`bool`) comparison/logical operators; no arithmetic or `String` operations yet |
+| Types: `int` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
+| Types: `double` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
+| Types: `bool` / `String` | Partial: locals, literals, binding results/arguments, and (`bool`) comparison/logical operators; `String` operations not implemented |
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
 | `while` | Implemented (any `bool` condition, e.g. `while (count < 10)`; nesting allowed) |
 | `for` (C-style) | Implemented (`for (var i = <init>; cond; updater)`; exactly one declared loop variable and one updater — Go's post-clause is a single statement; `for-in` not implemented) |
 | `break` / `continue` | Implemented (unlabeled only) |
-| `x += y` / `-=` / `*=` / `/=` | Implemented (`int`/`int` or `double`/`double` only) |
+| `x += y` / `-=` / `*=` | Implemented (`int`/`int` or `double`/`double` only) |
 | `x ~/= y` / `%=` | Implemented (`int` only; `~/=` is `x /= y`, `%=` is `x = dartrt.Mod(x, y)`) |
+| `x /= y` | Implemented (`double` only — Dart's `/` always returns `double`, so `int /= ...` isn't valid Dart to begin with; use `~/=` for `int`) |
+| Arithmetic `a + b` / `- ` / `*` / `/` / `~/` / `%` | Implemented (`+`/`-`/`*` on matching `int`/`int` or `double`/`double`; `~/`/`%` on `int`; `/` on `double`) |
+| `int` ⇄ `double` conversion: `.toDouble()` / `.toInt()` / `.round()` | Implemented (`.toDouble()` on `int`; `.toInt()`/`.round()` on `double`) |
 | `if` / `else if` / `else` | Implemented (block-bodied branches; loops and `if` may nest freely) |
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
 | `switch` | Not implemented |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
-| String interpolation | Implemented for `int` / `bool` / `String` expressions; `double` not implemented |
+| String interpolation | Implemented for `int` / `double` / `bool` / `String` expressions |
 | Cascade `..` | Not implemented |
 | `Duration` and `sleep` | Implemented (`dart:io` `sleep()`, `Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`) |
 | Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions and to methods on `@GoType` locals returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)). Chaining on call results not implemented |
-| Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` exists in the runtime but isn't wired into string interpolation yet (#9) |
+| Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation |
 | `tinygo_machine`: LED, GPIO in/out, sleep | Not implemented |
 
 See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and

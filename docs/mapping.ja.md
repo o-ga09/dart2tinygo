@@ -19,13 +19,18 @@
 | `for (var i = <初期値>; cond; updater) { ... }` | `for i := <初期値>; cond; updater { ... }` — そのまま対応。宣言する変数1つ、条件1つ、updater1つに限定（Go の post-clause は単一の文のため） |
 | `break` / `continue` | `break` / `continue` — ラベルなしのみ |
 | `x++` / `x--` | `x++` / `x--`（int のみ） |
-| `x += y` / `x -= y` / `x *= y` / `x /= y` | Go でも同じ記号。`x`/`y` は同じ型（`int` か `double`）でなければならない |
-| `a + b` / `a - b` / `a * b` | Go でも同じ記号。`int` のみ（`double` の算術は #9） |
-| `a ~/ b` | `a / b` — Go の `int` の除算は既に 0 方向への切り捨てなので、Dart の `~/` と一致する |
-| `a % b` | `dartrt.Mod(a, b)` — Dart の `%` は負にならない（`-5 % 3 == 1`）。Go の `%` は被除数の符号を保つ（`-5 % 3 == -2`）ので、そのまま `%` を出すと負の被除数で結果が違ってしまう |
-| `-a`（単項） | `-a`。`int` のみ |
-| `x ~/= y` | `x /= y` |
-| `x %= y` | `x = dartrt.Mod(x, y)` — `%` と同じ理由。`for` ループの updater としても有効 |
+| `x += y` / `x -= y` / `x *= y` | Go でも同じ記号。`x`/`y` は同じ型（`int` か `double`）でなければならない |
+| `a + b` / `a - b` / `a * b` | Go でも同じ記号。`x`/`y` は同じ型（`int` か `double`。混在不可） |
+| `a ~/ b` | `a / b` — Go の `int` の除算は既に 0 方向への切り捨てなので、Dart の `~/` と一致する。`int` のみ |
+| `a % b` | `dartrt.Mod(a, b)` — Dart の `%` は負にならない（`-5 % 3 == 1`）。Go の `%` は被除数の符号を保つ（`-5 % 3 == -2`）ので、そのまま `%` を出すと負の被除数で結果が違ってしまう。`int` のみ |
+| `a / b` | `a / b`。`double` のみ — Dart の `/` は int 同士でも常に `double` を返すため、生成器がキャストなしにそれを再現できない。先に `.toDouble()` で変換する |
+| `-a`（単項） | `-a`。`int` か `double` |
+| `x ~/= y` | `x /= y`。`int` のみ |
+| `x %= y` | `x = dartrt.Mod(x, y)` — `%` と同じ理由。`for` ループの updater としても有効。`int` のみ |
+| `x /= y` | `x /= y`。`x`（と `y`）は `double` でなければならない — `/` と同じ理由。`int` の `i` に対する `i /= 2;` はそもそも有効な Dart ではない（`i` の推論型が `double` になってしまう）ので、未対応構文以前の問題。切り捨て除算は `~/=` を使う |
+| `x.toDouble()`（`x`: `int`） | `float64(x)` |
+| `x.toInt()`（`x`: `double`） | `int(x)` — Go 自身の `int` 変換と同じく 0 方向への切り捨て |
+| `x.round()`（`x`: `double`） | `int(math.Round(x))` — 0 から離れる方向への四捨五入。Dart の `double.round()` と一致 |
 | `print(<文字列>)` | `println(<文字列>)` — `fmt.Println` ではない（TinyGo で `fmt` を巻き込まないため） |
 | `print('... $x ...')` | 文字列連結：`"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)`（`seconds`/`minutes`/`hours`/`days`/`microseconds` にも対応。複数指定時は加算） |
@@ -55,7 +60,7 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 `require <module> v0.0.0` と `replace <module> => <ローカル絶対パス>` を出力し、
 続けて `go mod tidy` を実行する。それ以外は `go mod tidy` に任せる。
 
-## 数値の意味論（2026-09-22 決定。`int` は実装済み、`double` の算術は #9）
+## 数値の意味論（2026-09-22 決定。`int` と `double` は実装済み）
 
 - **`int` → Go の `int`**（プラットフォーム幅。SAMD51 などの 32bit MCU では 32bit で、32bit で桁あふれする）。
   理由：Dart 自身が Web（dart2js のビット演算は 32bit）でプラットフォーム依存の整数意味論を
@@ -67,15 +72,19 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 - 整数リテラルは Go の型なし定数のまま（`x := 0`）。
 - `~/` → Go の `/`（どちらも 0 方向への切り捨て）。`%` は異なる（Dart `-5 % 3 == 1`、Go は `-2`）
   ので下記ランタイムヘルパを経由する。
-- `int` の算術（`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入 `+=`/`-=`/`*=`/`/=`/`~/=`/`%=`）は実装済み。
-  両辺とも `int` でなければならない（暗黙の型変換はしない）。上の v0.1 の表を参照。
+- `int`/`double` の算術（`+`/`-`/`*`、単項 `-`、複合代入 `+=`/`-=`/`*=`）は、両辺が一致する型
+  （`int` 同士か `double` 同士、暗黙変換なし）で実装済み。`~/`/`%`/`~/=`/`%=` は `int` のみ、
+  `/`/`/=` は `double` のみ（Dart の `/` は常に `double` を返すため）。上の v0.1 の表を参照。
+- `int` ⇄ `double` 変換（`.toDouble()`/`.toInt()`/`.round()`）は実装済み。それぞれが橋渡しする
+  方向にのみ限定する（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に）ことで、
+  生成する Go のキャストが意味のないもの（恒等変換）にならないようにしている。
 
 ## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
 | Dart | Go | 状態 |
 | --- | --- | --- |
-| `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入） |
-| `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値。算術・補間は未実装） |
+| `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入、`.toDouble()`） |
+| `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、文字列補間） |
 | `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値、比較・論理演算子、`if`） |
 | `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値。操作は未実装） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
@@ -99,14 +108,13 @@ Go の式一つで表せない意味論は、`packages/dart2tinygo/go/` の小�
 トランスパイラ自身のパッケージに依存する理由はないため）ので、生成器は `package:dart2tinygo`
 自身のパッケージ設定（`Isolate.resolvePackageUri`）から見つける。使ったときだけ import される。
 中身：`Mod`（Dart の `%`。`%`・`%=` で使用、実装済み）、`FormatDouble`（Dart は `1.0` と出すが Go の
-`strconv.FormatFloat` は `1`。ランタイムには実装済みだが、文字列補間への組み込みは #9）。
+`strconv.FormatFloat` は `1`。実装済みで、文字列補間にも組み込み済み）。
 これは言語意味論でありボード知識ではないので、本体にボード固有コードを入れない原則には反しない。
 
-## 文字列補間（`int` / `bool` / `String` は実装済み、`double` は決定済み）
+## 文字列補間（`int` / `double` / `bool` / `String` すべて実装済み）
 
 - `fmt.Sprintf` は使わない。型に応じて `strconv` 等で連結する（TinyGo のバイナリ肥大化を防ぐため）。
-- 実装済み：`int` → `strconv.Itoa`、`bool` → `strconv.FormatBool`、`String` → そのまま。補間式はローカル変数に限らず、対応している値の式（リテラル、ローカル変数、バインディング呼び出し、Go 定数）なら何でもよい。`print(s)` も同様に任意の `String` 式を受け付ける。
-- 決定：`double` → `dartrt.FormatDouble`（`dartrt` ランタイム待ち）。
+- `int` → `strconv.Itoa`、`bool` → `strconv.FormatBool`、`String` → そのまま、`double` → `dartrt.FormatDouble`。補間式はローカル変数に限らず、対応している値の式（リテラル、ローカル変数、バインディング呼び出し、算術式、`.toDouble()`/`.toInt()`/`.round()`、Go 定数）なら何でもよい。`print(s)` も同様に任意の `String` 式を受け付ける。
 
 ## 生成する `go.mod`
 

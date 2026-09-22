@@ -18,13 +18,18 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 | `for (var i = <init>; cond; updater) { ... }` | `for i := <init>; cond; updater { ... }` — direct; exactly one declared loop variable, one condition, one updater (Go's post-clause is a single statement) |
 | `break` / `continue` | `break` / `continue` — unlabeled only |
 | `x++` / `x--` | `x++` / `x--` (int only) |
-| `x += y` / `x -= y` / `x *= y` / `x /= y` | same tokens in Go; `x`/`y` must have the same type, `int` or `double` |
-| `a + b` / `a - b` / `a * b` | same tokens in Go; `int` only (`double` arithmetic is #9) |
-| `a ~/ b` | `a / b` — Go's `int` division already truncates toward zero, like Dart's `~/` |
-| `a % b` | `dartrt.Mod(a, b)` — Dart's `%` is never negative (`-5 % 3 == 1`); Go's `%` keeps the dividend's sign (`-5 % 3 == -2`), so a plain `%` would be wrong for negative operands |
-| `-a` (unary) | `-a`; `int` only |
-| `x ~/= y` | `x /= y` |
-| `x %= y` | `x = dartrt.Mod(x, y)` — same reasoning as `%`; also valid as a `for`-loop updater |
+| `x += y` / `x -= y` / `x *= y` | same tokens in Go; `x`/`y` must have the same type, `int` or `double` |
+| `a + b` / `a - b` / `a * b` | same tokens in Go; `x`/`y` must have the same type, `int` or `double` (not mixed) |
+| `a ~/ b` | `a / b` — Go's `int` division already truncates toward zero, like Dart's `~/`; `int` only |
+| `a % b` | `dartrt.Mod(a, b)` — Dart's `%` is never negative (`-5 % 3 == 1`); Go's `%` keeps the dividend's sign (`-5 % 3 == -2`), so a plain `%` would be wrong for negative operands; `int` only |
+| `a / b` | `a / b`; `double` only — Dart's `/` always returns `double`, even for two `int`s, which the generator can't reproduce without a cast; convert an `int` with `.toDouble()` first |
+| `-a` (unary) | `-a`; `int` or `double` |
+| `x ~/= y` | `x /= y`; `int` only |
+| `x %= y` | `x = dartrt.Mod(x, y)` — same reasoning as `%`; also valid as a `for`-loop updater; `int` only |
+| `x /= y` | `x /= y`; `x` (and `y`) must be `double` — same reasoning as `/`. `i /= 2;` for an `int` `i` isn't valid Dart to begin with (`i`'s inferred type would be `double`), not merely unsupported syntax; use `~/=` for truncating `int` division |
+| `x.toDouble()` (`x`: `int`) | `float64(x)` |
+| `x.toInt()` (`x`: `double`) | `int(x)` — truncates toward zero, like Go's own `int` conversion |
+| `x.round()` (`x`: `double`) | `int(math.Round(x))` — rounds half away from zero, matching Dart's `double.round()` |
 | `print(<string>)` | `println(<string>)` — not `fmt.Println`, to avoid pulling in `fmt` on TinyGo |
 | `print('... $x ...')` | string concatenation: `"... " + strconv.Itoa(x) + " ..."` |
 | `sleep(Duration(milliseconds: n))` | `time.Sleep(n * time.Millisecond)` (also supports `seconds`/`minutes`/`hours`/`days`/`microseconds`, summed when combined) |
@@ -55,7 +60,7 @@ Generated `go.mod`: for each binding whose Dart package ships `go/go.mod`,
 `require <module> v0.0.0` plus `replace <module> => <absolute local path>`,
 followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 
-## Numeric semantics (decided 2026-09-22; `int` implemented, `double` arithmetic is #9)
+## Numeric semantics (decided 2026-09-22; `int` and `double` implemented)
 
 - **`int` → Go `int`** (platform width: 32-bit on 32-bit MCUs such as the
   SAMD51, wrapping at 32 bits). Rationale: Dart already accepts
@@ -69,16 +74,22 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 - Integer literals stay untyped Go constants (`x := 0`).
 - `~/` → Go `/` (both truncate toward zero). `%` differs (Dart `-5 % 3 == 1`,
   Go `-2`) and goes through the runtime helper below.
-- `int` arithmetic (`+`/`-`/`*`/`~/`/`%`, unary `-`, and the compound forms
-  `+=`/`-=`/`*=`/`/=`/`~/=`/`%=`) is implemented; both operands must be
-  `int` (no implicit promotion), see the v0.1 table above.
+- `int`/`double` arithmetic (`+`/`-`/`*`, unary `-`, and the compound forms
+  `+=`/`-=`/`*=`) is implemented for matching operands (both `int` or both
+  `double`, no implicit promotion); `~/`/`%`/`~/=`/`%=` are `int`-only, `/`/
+  `/=` are `double`-only (Dart's `/` always returns `double`), see the v0.1
+  table above.
+- `int` ⇄ `double` conversion (`.toDouble()`/`.toInt()`/`.round()`) is
+  implemented, restricted to the direction each bridges (`.toDouble()` on
+  `int`, `.toInt()`/`.round()` on `double`) so every generated Go cast is
+  meaningful rather than a redundant identity conversion.
 
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
 | --- | --- | --- |
-| `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment) |
-| `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; no arithmetic or interpolation yet) |
+| `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
+| `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
 | `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
 | `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | impl. (literals/locals/binding results; no operations yet) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
@@ -105,15 +116,14 @@ since it isn't declared by any `@GoImport` — nothing in the entry point's
 package graph otherwise points back at the transpiler's own package. It is
 imported only when used. Contents: `Mod` (Dart `%`, used by `%` and `%=`,
 implemented); `FormatDouble` (Dart prints `1.0`, Go's
-`strconv.FormatFloat` prints `1`; implemented in the runtime, wired into
-string interpolation by #9). This is language semantics, not board
-knowledge, so it does not violate the core's no-board-code rule.
+`strconv.FormatFloat` prints `1`; implemented, wired into string
+interpolation). This is language semantics, not board knowledge, so it does
+not violate the core's no-board-code rule.
 
-## String interpolation (implemented for `int` / `bool` / `String`, decided for `double`)
+## String interpolation (implemented for `int` / `double` / `bool` / `String`)
 
 - Do not use `fmt.Sprintf`. Concatenate with `strconv` etc. based on type, to avoid bloating the TinyGo binary.
-- Implemented: `int` → `strconv.Itoa`, `bool` → `strconv.FormatBool`, `String` → verbatim. The interpolated expression may be any supported value expression (literal, local, binding call, Go constant), not only a local. `print(s)` likewise takes any `String` expression.
-- Decided: `double` → `dartrt.FormatDouble` (waits for the `dartrt` runtime).
+- `int` → `strconv.Itoa`, `bool` → `strconv.FormatBool`, `String` → verbatim, `double` → `dartrt.FormatDouble`. The interpolated expression may be any supported value expression (literal, local, binding call, arithmetic, `.toDouble()`/`.toInt()`/`.round()`, Go constant), not only a local. `print(s)` likewise takes any `String` expression.
 
 ## Generated `go.mod`
 
