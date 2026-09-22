@@ -25,10 +25,13 @@ void main() {
   internal pull-up), `high()`/`low()`/`toggle()`/`get()`.
 - **ADC**: `newAdc(pin)` configures a `Pin` as an analog input; `.read()`
   returns the raw 0-65535 sample.
-- **PWM** is not implemented yet — every chip family TinyGo supports exposes
-  a different PWM peripheral type with no common shape (unlike GPIO/ADC), so
-  a board-agnostic API needs real per-chip-family work; see
-  [`docs/writing_bindings.md`](../../docs/writing_bindings.md#decided-not-yet-implemented-2026-09-22).
+- **PWM**: `newPwm(pin, freqHz)` probes every PWM peripheral this chip family
+  exposes (TCC0-4 on atsamd51, PWM0-7 on rp2, ...) for one that can claim the
+  pin — every chip family exposes a different peripheral type with no common
+  shape, unlike GPIO/ADC, so this is real per-chip-family probing rather than
+  a fixed mapping; `.setFrequency(freqHz)` retunes it (shared by every
+  channel on the same underlying peripheral) and `.setDuty(percent)` sets
+  the duty cycle (0-100).
 
 See `examples/blinky` for a full board-agnostic example, buildable for any
 TinyGo target (`tinygo build -target=<board> .`).

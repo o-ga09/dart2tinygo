@@ -142,6 +142,44 @@ GoLocalModule? findLocalModuleNear(String sourcePath) {
   }
 }
 
+/// Reads [module]'s own `go.mod` for `replace <path> => <dir>` directives
+/// pointing at another local checkout (a path that itself has a `go.mod`),
+/// and returns each as a further [GoLocalModule].
+///
+/// A binding's Go module can itself depend on another binding's local Go
+/// module (e.g. `wio_terminal`'s pin constants returning `tinygo_machine`'s
+/// `Pin` type, #22) — but Go's own `replace` directive only ever applies
+/// within the module actually being built, never transitively through a
+/// dependency's own `go.mod` (https://go.dev/ref/mod#go-mod-file-replace,
+/// confirmed against `go` 1.27: a downstream build fails with "missing
+/// go.sum entry" until its *own* go.mod repeats the replace). The caller
+/// (`bin/dart2tinygo.dart`) closes that gap by copying these into the
+/// generated go.mod too, alongside the directly-`@GoImport`ed modules.
+///
+/// One hop only; call again on the results to walk a longer chain.
+List<GoLocalModule> localModuleReplacesOf(GoLocalModule module) {
+  final goModFile = File(p.join(module.directory, 'go.mod'));
+  if (!goModFile.existsSync()) return const [];
+  final found = <GoLocalModule>[];
+  for (final line in goModFile.readAsStringSync().split('\n')) {
+    final trimmed = line.trim();
+    if (!trimmed.startsWith('replace ')) continue;
+    final arrow = trimmed.indexOf('=>');
+    if (arrow < 0) continue;
+    final target = trimmed.substring(arrow + 2).trim();
+    if (target.isEmpty) continue;
+    final targetDir = p.isAbsolute(target)
+        ? target
+        : p.normalize(p.join(module.directory, target));
+    final targetGoMod = File(p.join(targetDir, 'go.mod'));
+    if (!targetGoMod.existsSync()) continue;
+    final modulePath = _moduleLine(targetGoMod.readAsStringSync());
+    if (modulePath == null) continue;
+    found.add(GoLocalModule(modulePath: modulePath, directory: targetDir));
+  }
+  return found;
+}
+
 String? _moduleLine(String goModSource) {
   for (final line in goModSource.split('\n')) {
     final trimmed = line.trim();

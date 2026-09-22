@@ -20,3 +20,5 @@ dependencies:
   # Kept in lockstep with this package's own version by tool/sync_versions.dart
   # (run by tagpr on every release).
   tinygo_annotations: ^0.0.1
+  # lib/pins.dart shares tinygo_machine's own Pin type (#22).
+  tinygo_machine: ^0.0.1

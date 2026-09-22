@@ -25,11 +25,13 @@ void main() {
   `high()`/`low()`/`toggle()`/`get()`。
 - **ADC**: `newAdc(pin)` で `Pin` をアナログ入力として設定し、`.read()` で
   0〜65535 の生サンプル値を取得する。
-- **PWM** は未実装。GPIO/ADC と違い、TinyGo が対応するチップファミリごとに
-  形の異なる PWM ペリフェラル型を公開しており共通の形が無いため、ボード非依存な
-  API にはチップファミリ別の実装作業が本当に必要になる。
-  [`docs/writing_bindings.ja.md`](../../docs/writing_bindings.ja.md) の
-  「決定済み・未実装」を参照。
+- **PWM**: `newPwm(pin, freqHz)` は、このチップファミリが公開する PWM
+  ペリフェラルを（atsamd51 なら TCC0〜4、rp2 なら PWM0〜7、...）順に試し、
+  そのピンを取得できたものを使う。GPIO/ADC と違いチップファミリごとに形の
+  異なるペリフェラル型を公開しており共通の形が無いため、固定的なマッピングでは
+  なくチップファミリ別の探索になっている。`.setFrequency(freqHz)` で周波数を
+  変更（同じペリフェラルの他チャンネルにも影響する）、`.setDuty(percent)` で
+  デューティ比（0〜100）を設定する。
 
 ボード非依存の完全な例は `examples/blinky` を参照（任意の TinyGo ターゲットで
 `tinygo build -target=<board> .` がビルド可能）。

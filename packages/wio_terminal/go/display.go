@@ -58,3 +58,41 @@ func (d *Display) Clear() {
 func (d *Display) DrawText(x, y int, text string) {
 	tinyfont.WriteLine(d.dev, &freemono.Bold12pt7b, int16(x), int16(y), text, white)
 }
+
+// Width returns the screen width in pixels at the current rotation.
+func (d *Display) Width() int {
+	w, _ := d.dev.Size()
+	return int(w)
+}
+
+// Height returns the screen height in pixels at the current rotation.
+func (d *Display) Height() int {
+	_, h := d.dev.Size()
+	return int(h)
+}
+
+// FillScreen fills the whole screen with c.
+func (d *Display) FillScreen(c Color) {
+	d.dev.FillScreen(c.rgba())
+}
+
+// SetBacklight turns the LCD backlight on or off.
+func (d *Display) SetBacklight(on bool) {
+	machine.LCD_BACKLIGHT.Set(on)
+}
+
+// SetRotation rotates the screen clockwise by r degrees (0/90/180/270; any
+// other value is treated as 0). Width/Height swap between the 0/180 and
+// 90/270 cases.
+func (d *Display) SetRotation(r int) {
+	switch r {
+	case 90:
+		d.dev.SetRotation(ili9341.Rotation90)
+	case 180:
+		d.dev.SetRotation(ili9341.Rotation180)
+	case 270:
+		d.dev.SetRotation(ili9341.Rotation270)
+	default:
+		d.dev.SetRotation(ili9341.Rotation0)
+	}
+}

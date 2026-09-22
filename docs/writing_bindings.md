@@ -105,17 +105,77 @@ See [`mapping.md`](./mapping.md) for the generated Go.
   (errors become `panic` or a `bool` result), exactly as `wio.NewDisplay`
   folds the ILI9341/SPI setup. `@GoType` names the exact Go type expression,
   `*` included.
-- **`tinygo_machine` PWM (#21 task list, last item) is deferred.** Unlike
-  GPIO/ADC — both a single common shape across every TinyGo target,
-  `machine.Pin`'s and `machine.ADC`'s methods in `machine.go` itself — PWM
-  has no common type: each chip family exposes a different peripheral type
-  (`machine.TCC0..4` on SAMD51, `machine.PWM0..7` on RP2, ...) and TinyGo's
-  own examples pick the pin/peripheral pairing per board rather than from an
-  arbitrary `Pin`. A board-agnostic `tinygo_machine` API is possible (walk
-  the candidate peripherals per chip family, in per-chip-family files under
-  `go/`, the way TinyGo's own `machine` package is organized) but is real,
-  unverified-on-hardware work of its own; tracked as a follow-up rather than
-  folded into the GPIO/ADC implementation.
+- **`tinygo_machine` PWM (#44) is implemented.** Unlike GPIO/ADC — both a
+  single common shape across every TinyGo target, `machine.Pin`'s and
+  `machine.ADC`'s methods in `machine.go` itself — PWM has no common type:
+  each chip family exposes a different peripheral type (`machine.TCC0..4` on
+  atsamd51, `machine.PWM0..7` on rp2, ...). `NewPWM` walks a per-chip-family
+  candidate list (`pwmCandidates`, in `go/pwm_*.go`, the way TinyGo's own
+  `machine` package itself is organized — one file per chip family under a
+  `//go:build` tag) trying each peripheral's `.Channel(pin)` until one
+  succeeds, against a `pwmPeripheral` interface (`Configure`/`Channel`/`Top`/
+  `Set`) that both `*machine.TCC` and rp2's PWM type satisfy structurally —
+  there is no such exported interface in `machine` itself, since only one
+  concrete PWM type is ever in scope for a given target. Verified with
+  `tinygo build` for `wioterminal` (atsamd51p19), `pico` (rp2040), and
+  `itsybitsy-m4` (atsamd51g19, which only has TCC0-2); not verified on
+  hardware (duty-cycle/frequency correctness can't be confirmed by
+  compilation alone).
+
+## Splitting a heavy dependency into its own Go sub-package (decided, 2026-09-22)
+
+A binding whose Go implementation pulls in a much heavier dependency than
+the rest of the package (e.g. `wio_terminal`'s microSD binding, #19, needs
+`tinygo.org/x/tinyfs/fatfs`, which is cgo-based) should not grow every other
+example's build just because it lives in the same package. The fix needs no
+core changes:
+
+- Put the extra code in a Go sub-package under the binding's existing `go/`
+  directory (e.g. `go/sd/`) — still the *same* Go module (no nested
+  `go.mod`), just a sub-package, with its own dependencies added to the
+  shared `go.mod`.
+- Give it its own Dart library file (e.g. `lib/sd.dart`) with its own
+  `@GoImport('.../go/sd', alias: 'wiosd')`, separate from the package's main
+  library.
+
+The existing local-module replace logic (`findLocalModuleNear`, keyed off
+the single `go/go.mod` next to `pubspec.yaml`) already covers every
+sub-package's import path, since Go's `replace` matches by module path, not
+by which sub-package is imported — confirmed end to end (`dart2tinygo build`
++ `tinygo build -target=wioterminal`) for `wio_terminal`'s `go/sd` against
+`go/` (its main package). An example that only imports the main library
+never triggers the sub-package's cgo compilation at all.
+
+## Sharing a `@GoType` across binding packages (decided, 2026-09-22)
+
+A binding can return another binding's `@GoType` — e.g. `wio_terminal`'s
+40-pin-header pin constants (#22) return `tinygo_machine`'s own `Pin`, so a
+value like `WioPins.d0` works directly with `tinygo_machine`'s
+`configure`/`high`/`low`/`newAdc`/`newPwm`, rather than `wio_terminal`
+inventing its own incompatible pin type. This needed no annotation changes
+and, on the Dart-resolution side, no core changes either:
+
+- `isGoType`/`goTypeOf` look at the referenced Dart *class's own* metadata,
+  regardless of which library declared the `external` member that returns
+  or accepts it — so a `wio_terminal` getter returning `tinygo_machine`'s
+  `Pin` type checks out unconditionally.
+- The backend's own type-emission (`_writeType` and friends) resolves a
+  `@GoType`'s Go import from *that class's declaring library*, not from the
+  call site's library, and registers it as a used import — so the generated
+  file's import block always ends up correct (both `tgm` and `wio`, in the
+  example above) without the binding author doing anything.
+
+The one real gap was at the Go module-graph level, not the Dart side: the
+Go implementation behind `WioPins.d0` (`wio_terminal/go/pins.go`) has to
+declare `var D0 = tgm.Pin(machine.D0)`, which means `wio_terminal/go` itself
+now needs `tinygo_machine/go` as a dependency, replaced to the local
+checkout the same way an example's own generated `go.mod` replaces
+`wio_terminal/go` — see "Splitting a heavy dependency" above for why a
+`replace` in a *dependency's* own `go.mod` doesn't reach the final build on
+its own, and how `dart2tinygo build`/`flash` now closes that gap
+(`localModuleReplacesOf` in `frontend/bindings.dart`, walked transitively by
+`_withTransitiveLocalModules` in `bin/dart2tinygo.dart`). Confirmed end to
+end for `wio_terminal/go/pins.go` depending on `tinygo_machine/go`.
 
 ## Shipping the Go runtime with the binding
 
@@ -133,4 +193,8 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 ## Reference bindings in this repository
 
 - `packages/wio_terminal`: Seeed Wio Terminal (LCD text). Used by `examples/hello_wioterminal`.
-- `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`) and ADC (`newAdc` / `read`) implemented (#21); PWM deferred, see above. Used by `examples/blinky`.
+- `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`), ADC (`newAdc` / `read`), and PWM (`newPwm` / `setDuty`) implemented (#21, #44). Used by `examples/blinky`.
+- `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD (FAT) binding, split into its own Go sub-package/Dart library per the section above (#19).
+- `packages/wio_terminal/lib/wifi.dart` + `go/wifi`: Wi-Fi (RTL8720DN) + HTTP binding, same split (#20).
+- `packages/wio_terminal/lib/hid.dart` + `go/hid`: USB HID keyboard/mouse, same split — here to keep a plain-serial-only program from enabling the HID descriptor at all, rather than for binary size (#23).
+- `packages/wio_terminal/lib/pins.dart`: 40-pin-header/Grove pin constants, sharing `tinygo_machine`'s `Pin` type per the section above (#22).

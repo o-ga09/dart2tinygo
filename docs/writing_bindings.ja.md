@@ -103,16 +103,77 @@ func (d *Display) Width() int                               { /* ... */ }
   バインディングの Go 側がアダプタになる：そうした API を単一の値を返す関数・メソッドに
   包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
   初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
-- **`tinygo_machine` の PWM（#21 タスク一覧の最後の項目）は見送り。** GPIO/ADC は
-  `machine.go` 自体に定義された `machine.Pin`/`machine.ADC` のメソッドという、全 TinyGo
-  ターゲット共通の単一の形があるのに対し、PWM には共通の型が無い：チップファミリごとに
-  異なるペリフェラル型を公開しており（SAMD51 は `machine.TCC0..4`、RP2 は
-  `machine.PWM0..7` など）、TinyGo 自身のサンプルもピン／ペリフェラルの組をボードごとに
-  固定で選んでいて、任意の `Pin` から自動選択してはいない。ボード非依存な
-  `tinygo_machine` API を作ること自体は不可能ではない（TinyGo の `machine` パッケージ自体
-  と同じように、チップファミリ別ファイルを `go/` 配下に用意し、候補ペリフェラルを
-  走査する）が、実機未検証のまとまった作業になるため、GPIO/ADC の実装には含めず別途の
-  フォローアップとして追跡する。
+- **`tinygo_machine` の PWM（#44）は実装済み。** GPIO/ADC は `machine.go` 自体に定義された
+  `machine.Pin`/`machine.ADC` のメソッドという、全 TinyGo ターゲット共通の単一の形が
+  あるのに対し、PWM には共通の型が無い：チップファミリごとに異なるペリフェラル型を
+  公開している（atsamd51 は `machine.TCC0..4`、rp2 は `machine.PWM0..7` など）。
+  `NewPWM` は、TinyGo の `machine` パッケージ自体と同じようにチップファミリ別ファイル
+  （`go/pwm_*.go`、`//go:build` タグで分岐）に置いた候補ペリフェラル一覧
+  （`pwmCandidates`）を順に試し、`.Channel(pin)` が成功したものを使う。判定には
+  `Configure`/`Channel`/`Top`/`Set` を要求する `pwmPeripheral` インタフェースを使うが、
+  これは `machine` パッケージ自体には存在しない（あるターゲットからは常にひとつの
+  具象 PWM 型しか見えないため）。`*machine.TCC` と rp2 の PWM 型はどちらも構造的にこれを
+  満たす。`tinygo build` で `wioterminal`（atsamd51p19）、`pico`（rp2040）、
+  `itsybitsy-m4`（atsamd51g19、TCC0〜2 のみ）を確認済み。実機での検証は未実施
+  （デューティ比・周波数の正しさはコンパイルだけでは確認できない）。
+
+## 重い依存を別の Go サブパッケージに分離する（決定済み、2026-09-22）
+
+バインディングの Go 実装がパッケージの他の部分よりずっと重い依存を引き込む場合
+（例: `wio_terminal` のmicroSDバインディング #19 は cgo ベースの
+`tinygo.org/x/tinyfs/fatfs` を必要とする）、同じパッケージに住んでいるという
+理由だけで他のすべてのサンプルのビルドを肥大化させるべきではない。本体側の
+変更は不要：
+
+- バインディングの既存の `go/` ディレクトリ配下に、追加のコードを別の Go
+  サブパッケージとして置く（例: `go/sd/`）。あくまで*同じ* Go モジュール
+  （ネストした `go.mod` は作らない）のサブパッケージとし、依存は共有の
+  `go.mod` に追加する。
+- それに専用の Dart ライブラリファイル（例: `lib/sd.dart`）を与え、パッケージの
+  メインライブラリとは別に独自の `@GoImport('.../go/sd', alias: 'wiosd')` を
+  持たせる。
+
+既存のローカルモジュール replace のロジック（`pubspec.yaml` の隣にある単一の
+`go/go.mod` を起点にする `findLocalModuleNear`）は、どのサブパッケージの
+import パスもそのままカバーする。Go の `replace` はどのサブパッケージが
+import されるかではなくモジュールパスでマッチするためで、これは
+`wio_terminal` の `go/sd`（メインパッケージである `go/` に対して）で
+`dart2tinygo build` + `tinygo build -target=wioterminal` により実際に
+end-to-end で確認済み。メインライブラリしか import しないサンプルは、
+サブパッケージの cgo コンパイルを一切トリガーしない。
+
+## `@GoType` をバインディングパッケージ間で共有する（決定済み、2026-09-22）
+
+あるバインディングが、別のバインディングの `@GoType` を返すことができる。
+例えば `wio_terminal` の40ピンヘッダーのピン定数（#22）は `tinygo_machine`
+自身の `Pin` を返しており、`WioPins.d0` のような値がそのまま
+`tinygo_machine` の `configure`/`high`/`low`/`newAdc`/`newPwm` で使える
+（`wio_terminal` が互換性の無い独自のピン型を発明せずに済む）。これには
+注釈の変更は不要で、Dart側の解決についても本体側の変更は不要だった：
+
+- `isGoType`/`goTypeOf` は、どのライブラリがその `external` メンバを宣言
+  しているかに関わらず、参照されている Dart クラス自身のメタデータを見る。
+  そのため `wio_terminal` の getter が `tinygo_machine` の `Pin` 型を返して
+  いても無条件に型チェックが通る。
+- バックエンドの型出力ロジック（`_writeType` など）は、`@GoType` の Go
+  import を呼び出し元のライブラリからではなく*そのクラスを宣言している
+  ライブラリ*から解決し、使用済み import として登録する。そのため生成される
+  ファイルの import ブロックは（上の例なら `tgm` と `wio` の両方）バインディング
+  作者が何もしなくても常に正しくなる。
+
+本当のギャップは Go のモジュールグラフのレベルにあり、Dart 側にはなかった：
+`WioPins.d0` の裏にある Go 実装（`wio_terminal/go/pins.go`）は
+`var D0 = tgm.Pin(machine.D0)` を宣言する必要があり、これは
+`wio_terminal/go` 自体が `tinygo_machine/go` への依存を持ち、例のプログラム
+自身が生成する `go.mod` が `wio_terminal/go` を replace するのと同じように
+ローカルチェックアウトへ replace される必要があることを意味する。
+*依存先*自身の `go.mod` の `replace` だけでは最終ビルドに届かない理由と、
+`dart2tinygo build`/`flash` が今どうそのギャップを埋めているか
+（`frontend/bindings.dart` の `localModuleReplacesOf` を
+`bin/dart2tinygo.dart` の `_withTransitiveLocalModules` で推移的にたどる）
+は、上の「重い依存を別の Go サブパッケージに分離する」を参照。
+`wio_terminal/go/pins.go` が `tinygo_machine/go` に依存するケースで
+end-to-end に確認済み。
 
 ## Go ランタイムをバインディングに同梱する
 
@@ -130,4 +191,8 @@ Dart 側の宣言と Go 側のシグネチャは手で同期してください�
 ## このリポジトリにあるバインディング
 
 - `packages/wio_terminal`: Seeed Wio Terminal（LCD への文字描画）。`examples/hello_wioterminal` が利用。
-- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）と ADC（`newAdc` / `read`）を実装済み（#21）。PWM は見送り（上記参照）。`examples/blinky` が利用。
+- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）、ADC（`newAdc` / `read`）、PWM（`newPwm` / `setDuty`）を実装済み（#21、#44）。`examples/blinky` が利用。
+- `packages/wio_terminal/lib/sd.dart` + `go/sd`: microSD（FAT）バインディング。上記の方針に従い専用の Go サブパッケージ／Dart ライブラリに分離（#19）。
+- `packages/wio_terminal/lib/wifi.dart` + `go/wifi`: Wi-Fi（RTL8720DN）+ HTTP バインディング。同様に分離（#20）。
+- `packages/wio_terminal/lib/hid.dart` + `go/hid`: USB HIDキーボード/マウス。同様に分離。ここではバイナリサイズよりも、シリアルのみを使うプログラムでHIDディスクリプタを一切有効化させないことが目的（#23）。
+- `packages/wio_terminal/lib/pins.dart`: 40ピンヘッダー／Grove ポートのピン定数。上記の方針に従い `tinygo_machine` の `Pin` 型を共有（#22）。

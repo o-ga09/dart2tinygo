@@ -148,15 +148,17 @@ Future<int> _build(String entry, String outDir) async {
   final mainGoPath = p.join(outDirAbs.path, 'main.go');
   File(mainGoPath).writeAsStringSync(formatted);
 
+  final allLocalModules = _withTransitiveLocalModules(generated.localModules);
+
   final moduleName = _moduleNameFor(entry);
   final goModPath = p.join(outDirAbs.path, 'go.mod');
   File(goModPath).writeAsStringSync(
-    _goModSource(moduleName, generated.localModules),
+    _goModSource(moduleName, allLocalModules),
   );
 
   print('dart2tinygo: wrote $mainGoPath and $goModPath');
 
-  if (generated.localModules.isNotEmpty) {
+  if (allLocalModules.isNotEmpty) {
     // Bindings pull in third-party Go modules (drivers, fonts, ...), and
     // `tinygo build` needs them recorded in go.sum before it will build.
     final tidy = await _goModTidy(outDirAbs.path);
@@ -201,6 +203,24 @@ String _moduleNameFor(String entryPath) {
   }
   final sanitized = base.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
   return sanitized.isEmpty ? 'app' : sanitized;
+}
+
+/// Expands [direct] (the modules directly `@GoImport`ed by the entry point)
+/// with any further local modules each one's own `go.mod` `replace`s,
+/// transitively — see `localModuleReplacesOf` in `frontend/bindings.dart`
+/// for why this is needed at all.
+List<GoLocalModule> _withTransitiveLocalModules(List<GoLocalModule> direct) {
+  final byPath = {for (final module in direct) module.modulePath: module};
+  final queue = List<GoLocalModule>.from(direct);
+  while (queue.isNotEmpty) {
+    final module = queue.removeLast();
+    for (final found in localModuleReplacesOf(module)) {
+      if (byPath.containsKey(found.modulePath)) continue;
+      byPath[found.modulePath] = found;
+      queue.add(found);
+    }
+  }
+  return byPath.values.toList();
 }
 
 /// Binding runtimes that live in-tree next to their Dart package get a
