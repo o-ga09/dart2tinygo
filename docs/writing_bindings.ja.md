@@ -103,16 +103,19 @@ func (d *Display) Width() int                               { /* ... */ }
   バインディングの Go 側がアダプタになる：そうした API を単一の値を返す関数・メソッドに
   包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
   初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
-- **`tinygo_machine` の PWM（#21 タスク一覧の最後の項目）は見送り。** GPIO/ADC は
-  `machine.go` 自体に定義された `machine.Pin`/`machine.ADC` のメソッドという、全 TinyGo
-  ターゲット共通の単一の形があるのに対し、PWM には共通の型が無い：チップファミリごとに
-  異なるペリフェラル型を公開しており（SAMD51 は `machine.TCC0..4`、RP2 は
-  `machine.PWM0..7` など）、TinyGo 自身のサンプルもピン／ペリフェラルの組をボードごとに
-  固定で選んでいて、任意の `Pin` から自動選択してはいない。ボード非依存な
-  `tinygo_machine` API を作ること自体は不可能ではない（TinyGo の `machine` パッケージ自体
-  と同じように、チップファミリ別ファイルを `go/` 配下に用意し、候補ペリフェラルを
-  走査する）が、実機未検証のまとまった作業になるため、GPIO/ADC の実装には含めず別途の
-  フォローアップとして追跡する。
+- **`tinygo_machine` の PWM（#44）は実装済み。** GPIO/ADC は `machine.go` 自体に定義された
+  `machine.Pin`/`machine.ADC` のメソッドという、全 TinyGo ターゲット共通の単一の形が
+  あるのに対し、PWM には共通の型が無い：チップファミリごとに異なるペリフェラル型を
+  公開している（atsamd51 は `machine.TCC0..4`、rp2 は `machine.PWM0..7` など）。
+  `NewPWM` は、TinyGo の `machine` パッケージ自体と同じようにチップファミリ別ファイル
+  （`go/pwm_*.go`、`//go:build` タグで分岐）に置いた候補ペリフェラル一覧
+  （`pwmCandidates`）を順に試し、`.Channel(pin)` が成功したものを使う。判定には
+  `Configure`/`Channel`/`Top`/`Set` を要求する `pwmPeripheral` インタフェースを使うが、
+  これは `machine` パッケージ自体には存在しない（あるターゲットからは常にひとつの
+  具象 PWM 型しか見えないため）。`*machine.TCC` と rp2 の PWM 型はどちらも構造的にこれを
+  満たす。`tinygo build` で `wioterminal`（atsamd51p19）、`pico`（rp2040）、
+  `itsybitsy-m4`（atsamd51g19、TCC0〜2 のみ）を確認済み。実機での検証は未実施
+  （デューティ比・周波数の正しさはコンパイルだけでは確認できない）。
 
 ## Go ランタイムをバインディングに同梱する
 
@@ -130,4 +133,4 @@ Dart 側の宣言と Go 側のシグネチャは手で同期してください�
 ## このリポジトリにあるバインディング
 
 - `packages/wio_terminal`: Seeed Wio Terminal（LCD への文字描画）。`examples/hello_wioterminal` が利用。
-- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）と ADC（`newAdc` / `read`）を実装済み（#21）。PWM は見送り（上記参照）。`examples/blinky` が利用。
+- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）、ADC（`newAdc` / `read`）、PWM（`newPwm` / `setDuty`）を実装済み（#21、#44）。`examples/blinky` が利用。

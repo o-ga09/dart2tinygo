@@ -34,7 +34,7 @@ Any PR that adds a language feature must update this table.
 | Cascade `..` | Implemented, on a `@GoType` binding value only (`newDisplay()..clear()..drawText(...)`); every section must be a bare `..method(args)` binding call, as a statement or a local's initializer |
 | `enum` | Implemented — a plain user enum (`enum Mode { off, on }`: `.index`, `.name`, `==`/`!=`, `switch`) and a `@GoType`/`@GoName` binding enum (each constant maps onto an existing Go identifier, like a `static external` getter constant); no type parameters, `with`/`implements`, extra fields/methods, or constructor arguments on a constant |
 | Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation |
-| `tinygo_machine`: LED, GPIO in/out, sleep | Implemented — GPIO (`Pin.led`, `Pin(n)`, `configure(PinMode.output\|input)`, `high()`/`low()`/`toggle()`/`get()`) and ADC (`newAdc(pin)`, `.read()`); board-agnostic, verified with `tinygo build` for `wioterminal` and `pico`. PWM not yet — see [`writing_bindings.md`](./writing_bindings.md#decided-not-yet-implemented-2026-09-22) |
+| `tinygo_machine`: LED, GPIO in/out, ADC, PWM, sleep | Implemented — GPIO (`Pin.led`, `Pin(n)`, `configure(PinMode.output\|input)`, `high()`/`low()`/`toggle()`/`get()`), ADC (`newAdc(pin)`, `.read()`), and PWM (`newPwm(pin, freqHz)`, `.setDuty(percent)`); board-agnostic, verified with `tinygo build` for `wioterminal`, `pico`, and (PWM only) `itsybitsy-m4` — see [`writing_bindings.md`](./writing_bindings.md#decided-not-yet-implemented-2026-09-22) |
 
 See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 `packages/dart2tinygo/test/golden/` for a worked example

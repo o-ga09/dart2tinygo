@@ -105,17 +105,22 @@ See [`mapping.md`](./mapping.md) for the generated Go.
   (errors become `panic` or a `bool` result), exactly as `wio.NewDisplay`
   folds the ILI9341/SPI setup. `@GoType` names the exact Go type expression,
   `*` included.
-- **`tinygo_machine` PWM (#21 task list, last item) is deferred.** Unlike
-  GPIO/ADC — both a single common shape across every TinyGo target,
-  `machine.Pin`'s and `machine.ADC`'s methods in `machine.go` itself — PWM
-  has no common type: each chip family exposes a different peripheral type
-  (`machine.TCC0..4` on SAMD51, `machine.PWM0..7` on RP2, ...) and TinyGo's
-  own examples pick the pin/peripheral pairing per board rather than from an
-  arbitrary `Pin`. A board-agnostic `tinygo_machine` API is possible (walk
-  the candidate peripherals per chip family, in per-chip-family files under
-  `go/`, the way TinyGo's own `machine` package is organized) but is real,
-  unverified-on-hardware work of its own; tracked as a follow-up rather than
-  folded into the GPIO/ADC implementation.
+- **`tinygo_machine` PWM (#44) is implemented.** Unlike GPIO/ADC — both a
+  single common shape across every TinyGo target, `machine.Pin`'s and
+  `machine.ADC`'s methods in `machine.go` itself — PWM has no common type:
+  each chip family exposes a different peripheral type (`machine.TCC0..4` on
+  atsamd51, `machine.PWM0..7` on rp2, ...). `NewPWM` walks a per-chip-family
+  candidate list (`pwmCandidates`, in `go/pwm_*.go`, the way TinyGo's own
+  `machine` package itself is organized — one file per chip family under a
+  `//go:build` tag) trying each peripheral's `.Channel(pin)` until one
+  succeeds, against a `pwmPeripheral` interface (`Configure`/`Channel`/`Top`/
+  `Set`) that both `*machine.TCC` and rp2's PWM type satisfy structurally —
+  there is no such exported interface in `machine` itself, since only one
+  concrete PWM type is ever in scope for a given target. Verified with
+  `tinygo build` for `wioterminal` (atsamd51p19), `pico` (rp2040), and
+  `itsybitsy-m4` (atsamd51g19, which only has TCC0-2); not verified on
+  hardware (duty-cycle/frequency correctness can't be confirmed by
+  compilation alone).
 
 ## Shipping the Go runtime with the binding
 
@@ -133,4 +138,4 @@ Keep the Dart declarations and the Go signatures in sync by hand; the transpiler
 ## Reference bindings in this repository
 
 - `packages/wio_terminal`: Seeed Wio Terminal (LCD text). Used by `examples/hello_wioterminal`.
-- `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`) and ADC (`newAdc` / `read`) implemented (#21); PWM deferred, see above. Used by `examples/blinky`.
+- `packages/tinygo_machine`: board-agnostic bindings for TinyGo's `machine` package — GPIO (`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`), ADC (`newAdc` / `read`), and PWM (`newPwm` / `setDuty`) implemented (#21, #44). Used by `examples/blinky`.

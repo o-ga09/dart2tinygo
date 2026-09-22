@@ -63,3 +63,24 @@ class ADC {
 /// Configures [pin] as an analog input and returns a handle to read it.
 @GoName('tgm.NewADC')
 external ADC newAdc(Pin pin);
+
+/// Drives a [Pin] with a configurable duty cycle at a fixed frequency.
+///
+/// Board-agnostic: probes every PWM peripheral this chip family exposes
+/// (TCC0-4 on atsamd51, PWM0-7 on rp2, ...) for one that can claim the pin,
+/// since — unlike GPIO/ADC — no single peripheral type covers every pin on
+/// every chip family.
+@GoType('*tgm.PWM')
+class PWM {
+  PWM._();
+
+  /// Sets the duty cycle as a percentage (0-100); out-of-range values are
+  /// clamped.
+  @GoName('SetDuty')
+  external void setDuty(int percent);
+}
+
+/// Configures [pin] for PWM output at [freqHz] and returns a handle to
+/// control its duty cycle.
+@GoName('tgm.NewPWM')
+external PWM newPwm(Pin pin, int freqHz);

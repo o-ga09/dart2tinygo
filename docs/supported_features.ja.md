@@ -34,7 +34,7 @@
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
 | 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数、`@GoType` クラス自身の `external`／`@GoName` 付きコンストラクタ（`Pin(3)`）、`@GoType` のレシーバ — ローカル変数、または（チェーン。任意の深さ）別のバインディング呼び出し／コンストラクタの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
 | 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `double` の文字列補間に組み込み済み |
-| `tinygo_machine`: LED、GPIO入出力、スリープ | 実装済み — GPIO（`Pin.led`、`Pin(n)`、`configure(PinMode.output\|input)`、`high()`/`low()`/`toggle()`/`get()`）と ADC（`newAdc(pin)`、`.read()`）。ボード非依存で `wioterminal`/`pico` 双方の `tinygo build` で確認済み。PWM は未対応 — [`writing_bindings.ja.md`](./writing_bindings.ja.md) の「決定済み・未実装」参照 |
+| `tinygo_machine`: LED、GPIO入出力、ADC、PWM、スリープ | 実装済み — GPIO（`Pin.led`、`Pin(n)`、`configure(PinMode.output\|input)`、`high()`/`low()`/`toggle()`/`get()`）、ADC（`newAdc(pin)`、`.read()`）、PWM（`newPwm(pin, freqHz)`、`.setDuty(percent)`）。ボード非依存で `wioterminal`/`pico`（PWMのみ `itsybitsy-m4` も）の `tinygo build` で確認済み — [`writing_bindings.ja.md`](./writing_bindings.ja.md) の「決定済み・未実装」参照 |
 
 正確な変換ルールは [`docs/mapping.ja.md`](./mapping.ja.md) を、実例は
 `packages/dart2tinygo/test/golden/`（`minimal_blink.dart` / `.go`）を参照。
