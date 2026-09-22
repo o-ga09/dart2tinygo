@@ -75,6 +75,15 @@ class Widget {
 
   @GoName('Level')
   external int level();
+
+  /// `List<int>` in and out — the SD-card/byte-I/O shape (see the
+  /// `List<int>` section of `docs/mapping.md`): the Go side is `[]byte` on
+  /// both ends.
+  @GoName('ReadBytes')
+  external List<int> readBytes(String path);
+
+  @GoName('WriteBytes')
+  external void writeBytes(String path, List<int> data);
 }
 
 /// Missing `@GoName`: the checker must point at the annotation, not at the

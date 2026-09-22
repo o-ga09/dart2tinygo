@@ -79,6 +79,14 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (double_conversion)
         working-directory: /tmp/dart2tinygo-double-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Exercises List<int>/[]byte and String operations (index read/write,
+      # add, length, codeUnits, fromCharCodes, substring).
+      - name: dart2tinygo build (list_int_string golden case)
+        working-directory: packages/dart2tinygo
+        run: dart run bin/dart2tinygo.dart build test/golden/list_int_string.dart -o /tmp/dart2tinygo-list-out
+      - name: tinygo build -target=${{ matrix.target }} (list_int_string)
+        working-directory: /tmp/dart2tinygo-list-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'
