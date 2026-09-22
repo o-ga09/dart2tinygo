@@ -80,61 +80,104 @@ class BuildCommand extends Command<int> {
     final entry = _requireEntryArg(argResults!);
     if (entry == null) return 64;
     final outDir = argResults!['out'] as String;
-
-    final result = await resolveEntryPoint(entry);
-    final errors = checkEntryPoint(result);
-    if (errors.isNotEmpty) {
-      stderr.writeln('dart2tinygo: unsupported syntax in $entry:');
-      for (final error in errors) {
-        stderr.writeln('  $error');
-      }
-      return 1;
-    }
-
-    final generated = await generateGoFile(result);
-    final formatted = await _gofmt(generated.source);
-
-    final outDirAbs = Directory(outDir)..createSync(recursive: true);
-    final mainGoPath = p.join(outDirAbs.path, 'main.go');
-    File(mainGoPath).writeAsStringSync(formatted);
-
-    final moduleName = _moduleNameFor(entry);
-    final goModPath = p.join(outDirAbs.path, 'go.mod');
-    File(goModPath).writeAsStringSync(
-      _goModSource(moduleName, generated.localModules),
-    );
-
-    print('dart2tinygo: wrote $mainGoPath and $goModPath');
-
-    if (generated.localModules.isNotEmpty) {
-      // Bindings pull in third-party Go modules (drivers, fonts, ...), and
-      // `tinygo build` needs them recorded in go.sum before it will build.
-      final tidy = await _goModTidy(outDirAbs.path);
-      if (tidy != 0) return tidy;
-    }
-    return 0;
+    return _build(entry, outDir);
   }
 }
 
-/// `dart2tinygo flash <entry.dart> -target=<tinygo-target>`: requires real
-/// hardware, so it stays a stub outside the minimal-transpile scope
-/// (`HANDOFF_dart2tinygo.md` §7, task 5).
+/// `dart2tinygo flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]`:
+/// runs the same steps as `build`, then hands the output
+/// directory to `tinygo flash` with stdio inherited so TinyGo's own
+/// progress/errors show (`HANDOFF_dart2tinygo.md` §4.1 / §7 task 5).
 class FlashCommand extends Command<int> {
   FlashCommand() {
-    argParser.addOption('target', help: 'TinyGo target board.');
+    argParser
+      ..addOption(
+        'out',
+        abbr: 'o',
+        help: 'Output directory for the generated Go module.',
+        defaultsTo: 'build',
+      )
+      ..addOption('target', help: 'TinyGo target board (required).')
+      ..addOption('port', help: 'Serial port passed to `tinygo flash -port`.');
   }
 
   @override
   final name = 'flash';
 
   @override
-  final description = 'Not implemented yet (requires real hardware).';
+  final description = 'Build a Dart entry point and flash it with TinyGo.';
 
   @override
   Future<int> run() async {
+    final entry = _requireEntryArg(argResults!);
+    if (entry == null) return 64;
+
+    final target = argResults!['target'] as String?;
+    if (target == null || target.isEmpty) {
+      stderr.writeln('dart2tinygo: flash requires --target=<tinygo-target>');
+      return 64;
+    }
+
+    final outDir = argResults!['out'] as String;
+    final buildCode = await _build(entry, outDir);
+    if (buildCode != 0) return buildCode;
+
+    final port = argResults!['port'] as String?;
+    return _tinygoFlash(outDir, target, port);
+  }
+}
+
+/// Shared by `BuildCommand` and `FlashCommand`: checks, converts `main()` to
+/// a single-file Go program plus `go.mod`, and `go mod tidy`s it if it pulls
+/// in a binding's Go module.
+Future<int> _build(String entry, String outDir) async {
+  final result = await resolveEntryPoint(entry);
+  final errors = checkEntryPoint(result);
+  if (errors.isNotEmpty) {
+    stderr.writeln('dart2tinygo: unsupported syntax in $entry:');
+    for (final error in errors) {
+      stderr.writeln('  $error');
+    }
+    return 1;
+  }
+
+  final generated = await generateGoFile(result);
+  final formatted = await _gofmt(generated.source);
+
+  final outDirAbs = Directory(outDir)..createSync(recursive: true);
+  final mainGoPath = p.join(outDirAbs.path, 'main.go');
+  File(mainGoPath).writeAsStringSync(formatted);
+
+  final moduleName = _moduleNameFor(entry);
+  final goModPath = p.join(outDirAbs.path, 'go.mod');
+  File(goModPath).writeAsStringSync(
+    _goModSource(moduleName, generated.localModules),
+  );
+
+  print('dart2tinygo: wrote $mainGoPath and $goModPath');
+
+  if (generated.localModules.isNotEmpty) {
+    // Bindings pull in third-party Go modules (drivers, fonts, ...), and
+    // `tinygo build` needs them recorded in go.sum before it will build.
+    final tidy = await _goModTidy(outDirAbs.path);
+    if (tidy != 0) return tidy;
+  }
+  return 0;
+}
+
+Future<int> _tinygoFlash(String outDir, String target, String? port) async {
+  try {
+    final process = await Process.start(
+      'tinygo',
+      ['flash', '-target=$target', if (port != null) '-port=$port'],
+      workingDirectory: outDir,
+      mode: ProcessStartMode.inheritStdio,
+    );
+    return await process.exitCode;
+  } on ProcessException {
     stderr.writeln(
-      'dart2tinygo: `flash` is not implemented yet. Run `build` and flash '
-      'the generated go.mod with `tinygo flash` directly for now.',
+      'dart2tinygo: `tinygo` was not found on PATH; install it from '
+      'https://tinygo.org/getting-started/install/',
     );
     return 1;
   }

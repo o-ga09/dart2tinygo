@@ -32,14 +32,10 @@ void main() {
 # 1. Resolve dependencies (once, at the repository root — it is a pub workspace)
 dart pub get
 
-# 2. Convert to Go (writes main.go and go.mod, then runs `go mod tidy`)
+# 2. Convert to Go (writes main.go and go.mod, runs `go mod tidy`) and flash
 cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart build ../../examples/hello_wioterminal/main.dart \
-  -o ../../examples/hello_wioterminal/build
-
-# 3. Flash
-cd ../../examples/hello_wioterminal/build
-tinygo flash -target=wioterminal .
+dart run bin/dart2tinygo.dart flash ../../examples/hello_wioterminal/main.dart \
+  -o ../../examples/hello_wioterminal/build --target=wioterminal
 ```
 
 The screen turns black and the text appears in white, in landscape

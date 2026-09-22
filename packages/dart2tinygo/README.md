@@ -4,7 +4,7 @@
 
 The CLI and the Dart → Go transpiler engine itself.
 
-- `bin/`: CLI entry point (`build` implemented; `check` implemented; `flash` is a stub — requires real hardware)
+- `bin/`: CLI entry point (`build`, `check`, and `flash` implemented)
 - `lib/src/frontend/`: Parsing and resolved AST retrieval (implemented, via `package:analyzer`'s `AnalysisContextCollection`)
 - `lib/src/checker/`: Detection and error reporting for unsupported syntax (implemented for the v0.1 minimal subset)
 - `lib/src/ir/`: Intermediate representation (optional, not used yet — the backend walks the resolved AST directly)
@@ -15,12 +15,12 @@ The CLI and the Dart → Go transpiler engine itself.
 with `int` locals, `while (true)`, `print(...)`, and `sleep(Duration(...))`.
 See [`docs/supported_features.md`](../../docs/supported_features.md) for the
 exact scope and [`docs/mapping.md`](../../docs/mapping.md) for the
-conversion rules. Everything beyond that (classes, `if`/`for`, bindings,
-`flash`, ...) is not implemented yet.
+conversion rules.
 
 ```
 dart run bin/dart2tinygo.dart check <entry.dart>
 dart run bin/dart2tinygo.dart build <entry.dart> [-o out_dir]
+dart run bin/dart2tinygo.dart flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]
 ```
 
 See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the design principles and workflow.
