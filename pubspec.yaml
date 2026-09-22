@@ -16,3 +16,4 @@ workspace:
   - packages/dart2tinygo/test/fixtures/test_binding
   - examples/hello_wioterminal
   - examples/blinky
+  - examples/button_led
