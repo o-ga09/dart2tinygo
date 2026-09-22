@@ -19,10 +19,12 @@ CLI と Dart → Go 変換エンジン本体。
 [`docs/supported_features.ja.md`](../../docs/supported_features.ja.md)、
 変換ルールは [`docs/mapping.ja.md`](../../docs/mapping.ja.md) を参照。
 
-```
-dart run bin/dart2tinygo.dart check <entry.dart>
-dart run bin/dart2tinygo.dart build <entry.dart> [-o out_dir]
-dart run bin/dart2tinygo.dart flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]
+```sh
+dart pub global activate dart2tinygo   # 初回のみ
+
+dart2tinygo check <entry.dart>
+dart2tinygo build <entry.dart> [-o out_dir]
+dart2tinygo flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]
 ```
 
 設計方針・開発の流れは [`CONTRIBUTING.ja.md`](../../CONTRIBUTING.ja.md) を参照。

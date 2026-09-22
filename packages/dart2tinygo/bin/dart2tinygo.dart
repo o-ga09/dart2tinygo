@@ -29,9 +29,9 @@ Future<void> main(List<String> arguments) async {
   }
 }
 
-/// `dart2tinygo check <entry.dart>`: only runs the checker, per
-/// `HANDOFF_dart2tinygo.md` §4.1 — lists unsupported syntax with file/line/
-/// reason without attempting to generate Go.
+/// `dart2tinygo check <entry.dart>`: only runs the checker — lists
+/// unsupported syntax with file/line/reason without attempting to
+/// generate Go.
 class CheckCommand extends Command<int> {
   @override
   final name = 'check';
@@ -87,7 +87,7 @@ class BuildCommand extends Command<int> {
 /// `dart2tinygo flash <entry.dart> --target=<tinygo-target> [-o out_dir] [--port=<port>]`:
 /// runs the same steps as `build`, then hands the output
 /// directory to `tinygo flash` with stdio inherited so TinyGo's own
-/// progress/errors show (`HANDOFF_dart2tinygo.md` §4.1 / §7 task 5).
+/// progress/errors show.
 class FlashCommand extends Command<int> {
   FlashCommand() {
     argParser
@@ -264,9 +264,9 @@ Future<int> _goModTidy(String dir) async {
   }
 }
 
-/// Best-effort `gofmt`, matching `HANDOFF_dart2tinygo.md` §4.2 ("生成コードは
-/// gofmt 済みにする"). Falls back to the unformatted source if `gofmt` isn't
-/// on PATH, since board CI environments may only have `tinygo`.
+/// Best-effort `gofmt` on the generated code. Falls back to the
+/// unformatted source if `gofmt` isn't on PATH, since board CI
+/// environments may only have `tinygo`.
 Future<String> _gofmt(String source) async {
   try {
     final process = await Process.start('gofmt', []);

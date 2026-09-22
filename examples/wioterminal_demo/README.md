@@ -71,14 +71,14 @@ flash in two steps with `-stack-size=4KB` on the second one:
 ```sh
 # 1. Resolve dependencies (once, at the repository root — it is a pub workspace)
 dart pub get
+dart pub global activate dart2tinygo   # once, installs the `dart2tinygo` CLI
 
 # 2. Convert to Go (writes main.go and go.mod, runs `go mod tidy`)
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart build ../../examples/wioterminal_demo/main.dart \
-  -o ../../examples/wioterminal_demo/build
+dart2tinygo build examples/wioterminal_demo/main.dart \
+  -o examples/wioterminal_demo/build
 
 # 3. Build and flash with TinyGo directly
-cd ../../examples/wioterminal_demo/build
+cd examples/wioterminal_demo/build
 tinygo flash -target=wioterminal -stack-size=4KB .
 ```
 

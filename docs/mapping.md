@@ -7,8 +7,8 @@ Record conversion rules here once they're decided.
 ## v0.1 minimal transpile (decided, implemented)
 
 Scope: a single top-level `void main()` with `int` locals, `while (true)`,
-`print(...)`, and `sleep(Duration(...))` — see `HANDOFF_dart2tinygo.md` §7
-task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
+`print(...)`, and `sleep(Duration(...))`. Implemented in
+`packages/dart2tinygo/lib/src/backend/generator.dart`.
 
 | Dart | Go |
 | --- | --- |
@@ -213,11 +213,11 @@ patterns, and `for-in`/`for-loop`-in-`switch` label targets.
 
 `a..b()..c()` isn't a single Go expression — Go has nothing that reads a
 value and performs a sequence of calls on it without repeating the receiver
-— so it becomes a temporary plus a statement sequence, per HANDOFF
-§4.4's own `Pin.led..configure(...)` example. Restricted to a `@GoType`
-binding value, and every cascade section must be a bare `..method(args)`
-binding call (v0.1 has no classes/fields of its own to make a cascaded
-getter/setter/index section meaningful).
+— so it becomes a temporary plus a statement sequence, e.g.
+`Pin.led..configure(...)`. Restricted to a `@GoType` binding value, and
+every cascade section must be a bare `..method(args)` binding call (v0.1
+has no classes/fields of its own to make a cascaded getter/setter/index
+section meaningful).
 
 | Dart | Go |
 | --- | --- |

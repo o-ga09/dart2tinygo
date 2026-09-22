@@ -31,11 +31,11 @@ void main() {
 ```sh
 # 1. 依存関係を解決（リポジトリのルートで一度だけ。pub workspace のため）
 dart pub get
+dart pub global activate dart2tinygo   # 一度だけ。`dart2tinygo` CLI をインストールする
 
 # 2. Go に変換（main.go と go.mod を書き出し）してフラッシュ
-cd packages/dart2tinygo
-dart run bin/dart2tinygo.dart flash ../../examples/button_led/main.dart \
-  -o ../../examples/button_led/build --target=wioterminal
+dart2tinygo flash examples/button_led/main.dart \
+  -o examples/button_led/build --target=wioterminal
 ```
 
 3つある上部ボタンの左端（ボタンA）を押している間 LED が点灯し、離すと消灯する。

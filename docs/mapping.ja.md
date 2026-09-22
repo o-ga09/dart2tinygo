@@ -7,8 +7,7 @@
 ## v0.1 最小変換（決定・実装済み）
 
 対象範囲：トップレベルの `void main()` 単体、`int` 型ローカル変数、
-`while (true)`、`print(...)`、`sleep(Duration(...))`
-（`HANDOFF_dart2tinygo.md` §7 タスク2）。
+`while (true)`、`print(...)`、`sleep(Duration(...))`。
 `packages/dart2tinygo/lib/src/backend/generator.dart` に実装済み。
 
 | Dart | Go |
@@ -191,8 +190,8 @@ v0.1 のスコープ外：`case ... when ...` ガード、定数以外／デス�
 ## カスケード（2026-09-22 決定、実装済み）
 
 `a..b()..c()` は単一の Go 式にはならない — Go にはレシーバを繰り返さずに1つの値へ
-一連の呼び出しを行う構文がないため — 一時変数と文の列に変換する。HANDOFF §4.4 に
-ある `Pin.led..configure(...)` の例の通り。`@GoType` のバインディング値に限定し、
+一連の呼び出しを行う構文がないため — 一時変数と文の列に変換する。例：
+`Pin.led..configure(...)`。`@GoType` のバインディング値に限定し、
 各カスケードセクションは必ず素の `..method(args)` バインディング呼び出しでなければ
 ならない（v0.1 には自前のクラス・フィールドがなく、カスケードした getter/setter/
 添字セクションには対応する意味がないため）。
