@@ -2,7 +2,7 @@ name: tinygo_machine
 description: >-
   Board-agnostic dart2tinygo bindings for TinyGo's common machine package:
   GPIO and ADC implemented (#21); PWM not yet (see docs/writing_bindings.md).
-version: 0.0.1
+version: 0.0.2
 # Not published yet: see docs/releasing.md, "Day-to-day flow" step 5, and
 # publish.yml — flip this once tagpr/publish.yml are updated to include it.
 publish_to: none
@@ -20,4 +20,4 @@ resolution: workspace
 dependencies:
   # Kept in lockstep with this package's own version by tool/sync_versions.dart
   # (run by tagpr on every release).
-  tinygo_annotations: ^0.0.1
+  tinygo_annotations: ^0.0.2
