@@ -243,7 +243,8 @@ void _writeClassDeclaration(
 
 /// The Go receiver variable name for a class named [className]: its own
 /// first letter, lowercased (`Counter` → `c`, `docs/mapping.md`).
-String _receiverName(String className) => className.substring(0, 1).toLowerCase();
+String _receiverName(String className) =>
+    className.substring(0, 1).toLowerCase();
 
 /// `Foo(<params>) { ... }` (a class's single generative constructor, #32):
 /// each `this.field` parameter becomes a struct-literal field; any
@@ -697,7 +698,8 @@ String _writeUpdaterExpression(Expression expression, GoDeps deps) {
 /// (not [target] itself) is the reliable way to tell the two apart: a
 /// write-only position like this leaves `target`'s own `.element` `null`
 /// (see `docs/mapping.md`), unlike a value-position read.
-String _writeWriteTarget(Expression target, Element? writeElement, GoDeps deps) {
+String _writeWriteTarget(
+    Expression target, Element? writeElement, GoDeps deps) {
   if (writeElement is! SetterElement) return (target as SimpleIdentifier).name;
 
   final Expression? receiverTarget;
@@ -1127,7 +1129,12 @@ String? _writeFieldAccess(Expression expression, GoDeps deps) {
 /// `Counter(0)` — a call to a user class's own (non-`@GoType`) generative
 /// constructor, #32 → `NewCounter(0)` (`docs/mapping.md`).
 ///
-/// Returns `null` when [creation] isn't this shape, so the caller falls
+/// `Pin(3)` — a `@GoType` class's own `external`, `@GoName`'d constructor
+/// (#21) → its binding, exactly like a top-level binding call
+/// ([_writeBoundCall]) since a `@GoType` value is otherwise only ever
+/// produced by a top-level binding function (`docs/writing_bindings.md`).
+///
+/// Returns `null` when [creation] is neither shape, so the caller falls
 /// through to its usual unsupported-expression handling.
 String? _writeClassConstruction(
   InstanceCreationExpression creation,
@@ -1136,11 +1143,19 @@ String? _writeClassConstruction(
   final element = creation.constructorName.element;
   if (element is! ConstructorElement) return null;
   final cls = element.enclosingElement;
-  if (cls is! ClassElement || goTypeOf(cls) != null) return null;
+  if (cls is! ClassElement) return null;
 
   final args = creation.argumentList.arguments
       .map((arg) => _writeExpression(arg, deps))
       .join(', ');
+
+  if (goTypeOf(cls) != null) {
+    final binding = goBindingOf(element);
+    if (binding == null) return null;
+    _useImport(binding.import, deps);
+    return '${binding.goName}($args)';
+  }
+
   return 'New${cls.name}($args)';
 }
 

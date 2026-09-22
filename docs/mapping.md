@@ -98,6 +98,7 @@ map 1:1 onto Go calls; the transpiler adds no wrapper code of its own.
 | `beep(3);` where `beep` is `@GoName('rt.Beep')` | `rt.Beep(3)` |
 | `d.drawText(10, 20, 'hi');` where `drawText` is `@GoName('DrawText')` | `d.DrawText(10, 20, "hi")` |
 | `newDisplay().clear();` (method chaining on a call result, see #30) | `wio.NewDisplay().Clear()` — the receiver is emitted verbatim, at any chaining depth |
+| `Pin(3)` — a `@GoType` class's own constructor, `external` and `@GoName`'d (#21) | `tgm.Pin(3)` — the construction counterpart of a top-level binding call, since a `@GoType` value is otherwise only ever produced by one; `Pin(3).high()` chains onto it exactly like a call result does |
 | `final n = sensor.read();` / `var ok = isReady();` (`int` / `double` / `bool` / `String` / `@GoType` results) | `n := sensor.Read()` / `ok := rt.IsReady()` (Go infers the type; a non-void result used as a statement is discarded) |
 | `red` / `Button.a` where the getter is `@GoName('rt.Red')` / `@GoName('rt.ButtonA')` | `rt.Red` / `rt.ButtonA` — a bare identifier, no call |
 | Arguments: `int` / `double` / `bool` / `String` literal, local, binding call, Go constant reference | Emitted verbatim: untyped constant / identifier / call / identifier. No casts: a Go parameter must be `int` / `float64` / `bool` / `string` or the `@GoType` itself |

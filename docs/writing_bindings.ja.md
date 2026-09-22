@@ -11,6 +11,7 @@
 | --- | --- | --- |
 | `@GoImport(path, alias: ...)` | `library;` ディレクティブ | このライブラリの Go import。`alias` は省略可で、省略時は Go のデフォルト（パス末尾）がパッケージ名になる。 |
 | `@GoName(name)` | `external` なトップレベル関数 | Go 側の呼び出し先を完全修飾で書く（例: `'wio.NewDisplay'`。接頭辞は `@GoImport` の alias）。 |
+| `@GoName(name)` | `@GoType` クラスの `external` な無名コンストラクタ | トップレベル関数と全く同じく、Go 側の呼び出し先を完全修飾で書く（#21）。例: `Pin(n)` コンストラクタに対して `'tgm.Pin'`（Go の型変換）。`@GoType` の値は本来トップレベルのバインディング関数からしか作れないので、これはその構築版。戻り値には `Pin(3).high()` のように呼び出し結果と同様にチェーンできる（#30）。 |
 | `@GoName(name)` | `@GoType` クラスの `external` なインスタンスメソッド | Go のメソッド名（例: `'DrawText'`）。レシーバに対して呼び出される。 |
 | `@GoName(name)` | `external` なトップレベル getter、または `@GoType` クラスの `external static` getter | Go の定数・パッケージ変数を完全修飾で書く（例: `'wio.Red'`）。呼び出し括弧なしの識別子として出力される。 |
 | `@GoName(name)` | `@GoType` enum の `enum` 定数 | Go の定数・パッケージ変数を完全修飾で書く（例: `'machine.LED'`）。上の `static external` getter と全く同じく、呼び出し括弧なしの識別子として出力される。 |
@@ -88,7 +89,7 @@ func (d *Display) Width() int                               { /* ... */ }
 
 ## 現時点でトランスパイラが呼び出せる形
 
-- トップレベルのバインディング関数と、`@GoType` の値を持つレシーバ — ローカル変数、または別のバインディング呼び出しの戻り値（チェーン：`newDisplay().clear()`、任意の深さまで）— へのバインディングメソッド呼び出し（`display.drawText(...)`）を、文として（void 以外の戻り値は捨てられる）、ローカル変数の初期化子として、別のバインディング呼び出しの引数として、または `print(...)` の中で呼べる。
+- トップレベルのバインディング関数、`@GoType` クラス自身のバインディングコンストラクタ（`Pin(3)`、#21）、および `@GoType` の値を持つレシーバ — ローカル変数、または別のバインディング呼び出し／コンストラクタの戻り値（チェーン：`newDisplay().clear()`、`Pin(3).high()`、任意の深さまで）— へのバインディングメソッド呼び出し（`display.drawText(...)`）を、文として（void 以外の戻り値は捨てられる）、ローカル変数の初期化子として、別のバインディング呼び出しの引数として、または `print(...)` の中で呼べる。
 - `@GoType` のバインディング値へのカスケード（`newDisplay()..clear()..drawText(...)`）を、文として、またはローカル変数の初期化子として使える。各カスケードのセクションは必ず素の `..method(args)` バインディング呼び出しでなければならない — v0.1 には自前のクラス・フィールドがないため、カスケードした getter/setter/添字セクションには対応する意味がない。
 - 戻り値・ローカル変数の型: `int`、`double`、`bool`、`String`、`@GoType` クラス。`@GoType` には値型（`'wio.Color'`）もポインタ（`'*wio.Display'`）も書ける（文字列をそのまま出力するのでどちらも動く）。
 - 引数: 上記の型のリテラル、ローカル変数、別のバインディング呼び出し、Go 定数の参照（`red`、`Color.red`、`Pin.led`）。Dart の `int` / `double` / `bool` / `String` 引数は Go の `int` / `float64` / `bool` / `string` に対応するので、Go 側のシグネチャもその型で宣言する（`uint8` が欲しい Go 側はバインディング内で変換する。トランスパイラはキャストを出力しない）。
@@ -102,9 +103,16 @@ func (d *Display) Width() int                               { /* ... */ }
   バインディングの Go 側がアダプタになる：そうした API を単一の値を返す関数・メソッドに
   包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
   初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
-- `tinygo_machine` バインディングの最初の API は `Pin.led` / `Pin(n)` /
-  `configure(PinMode.output | PinMode.input)` / `high()` / `low()` / `toggle()` / `get()`。
-  `machine.LED` や `machine.PinConfig{...}` は最初のルールに従い Go 側で吸収する。
+- **`tinygo_machine` の PWM（#21 タスク一覧の最後の項目）は見送り。** GPIO/ADC は
+  `machine.go` 自体に定義された `machine.Pin`/`machine.ADC` のメソッドという、全 TinyGo
+  ターゲット共通の単一の形があるのに対し、PWM には共通の型が無い：チップファミリごとに
+  異なるペリフェラル型を公開しており（SAMD51 は `machine.TCC0..4`、RP2 は
+  `machine.PWM0..7` など）、TinyGo 自身のサンプルもピン／ペリフェラルの組をボードごとに
+  固定で選んでいて、任意の `Pin` から自動選択してはいない。ボード非依存な
+  `tinygo_machine` API を作ること自体は不可能ではない（TinyGo の `machine` パッケージ自体
+  と同じように、チップファミリ別ファイルを `go/` 配下に用意し、候補ペリフェラルを
+  走査する）が、実機未検証のまとまった作業になるため、GPIO/ADC の実装には含めず別途の
+  フォローアップとして追跡する。
 
 ## Go ランタイムをバインディングに同梱する
 
@@ -122,4 +130,4 @@ Dart 側の宣言と Go 側のシグネチャは手で同期してください�
 ## このリポジトリにあるバインディング
 
 - `packages/wio_terminal`: Seeed Wio Terminal（LCD への文字描画）。`examples/hello_wioterminal` が利用。
-- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング（予定、未実装）。
+- `packages/tinygo_machine`: TinyGo の `machine` パッケージに対するボード非依存バインディング。GPIO（`Pin.led` / `Pin(n)` / `configure` / `high` / `low` / `toggle` / `get`）と ADC（`newAdc` / `read`）を実装済み（#21）。PWM は見送り（上記参照）。`examples/blinky` が利用。

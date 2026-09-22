@@ -111,3 +111,23 @@ enum BadPin {
 
 @GoName('rt.High')
 external void high(Pin pin);
+
+/// A `@GoType` class with its own constructor (#21): the construction
+/// counterpart of [newWidget] above, since a `@GoType` value is otherwise
+/// only ever produced by a top-level binding function — see
+/// `docs/writing_bindings.md`.
+@GoType('rt.Gpio')
+class Gpio {
+  @GoName('rt.NewGpio')
+  external Gpio(int n);
+
+  @GoName('Value')
+  external int value();
+}
+
+/// A `@GoType` class whose constructor is missing `@GoName`: reported like a
+/// missing `@GoName` on a function.
+@GoType('rt.BadGpio')
+class BadGpio {
+  external BadGpio(int n);
+}

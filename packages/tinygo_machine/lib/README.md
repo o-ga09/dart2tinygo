@@ -1,3 +1,3 @@
 **Languages:** English | [日本語](./README.ja.md)
 
-Intended to hold board-agnostic bindings such as GPIO / time / LED. Not implemented yet.
+`tinygo_machine.dart`: board-agnostic GPIO (`Pin`, `PinMode`) and ADC (`ADC`, `newAdc`) bindings. See the package [`README.md`](../README.md).

@@ -119,6 +119,15 @@ jobs:
       - name: tinygo build -target=${{ matrix.target }} (class_basic)
         working-directory: /tmp/dart2tinygo-class-out
         run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
+      # Board-agnostic (tinygo_machine, #21): builds for every target in the
+      # matrix, unlike the board-specific examples below.
+      - name: dart2tinygo build (examples/blinky)
+        run: |
+          cd packages/dart2tinygo
+          dart run bin/dart2tinygo.dart build ../../examples/blinky/main.dart -o /tmp/dart2tinygo-blinky-out
+      - name: tinygo build examples/blinky
+        working-directory: /tmp/dart2tinygo-blinky-out
+        run: tinygo build -target=${{ matrix.target }} -o firmware.bin .
       # Board-specific examples only build for their own target.
       - name: dart2tinygo build (examples/hello_wioterminal)
         if: matrix.target == 'wioterminal'
