@@ -1495,8 +1495,10 @@ void main() {
 ''');
       expect(errors, isEmpty);
     });
+  });
 
-    test('reports binding methods called on non-local receivers', () async {
+  group('cascade and method chaining', () {
+    test('accepts a binding method called on a call-result receiver', () async {
       final errors = await checkBindingSource('''
 import 'package:test_binding/test_binding.dart';
 
@@ -1504,8 +1506,83 @@ void main() {
   newWidget().hide();
 }
 ''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts multi-level chaining and a chained call as a value',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  var n = newWidget().level();
+  beep(n);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a cascade as a statement', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  newWidget()
+    ..show(0, 0, 'a')
+    ..hide();
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a cascade as a local initializer', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget()
+    ..show(0, 0, 'a')
+    ..hide();
+  beep(widget.level());
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a cascade on a non-@GoType target', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  readLevel()..toString();
+}
+''');
+      expect(errors, isNotEmpty);
+      expect(errors.first.reason, contains('@GoType'));
+    });
+
+    test('reports a cascade section that is not a binding method call',
+        () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  newWidget()..level;
+}
+''');
       expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('local variable'));
+      expect(errors.single.reason, contains('cascade section'));
+    });
+
+    test('reports a cascade method without @GoName', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  newWidget()..toString();
+}
+''');
+      expect(errors, hasLength(1));
     });
   });
 

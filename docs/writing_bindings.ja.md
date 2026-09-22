@@ -70,7 +70,8 @@ func (d *Display) Width() int                               { /* ... */ }
 
 ## 現時点でトランスパイラが呼び出せる形
 
-- トップレベルのバインディング関数と、`@GoType` の値を持つローカル変数へのバインディングメソッド呼び出し（`display.drawText(...)`）を、文として（void 以外の戻り値は捨てられる）、ローカル変数の初期化子として、別のバインディング呼び出しの引数として、または `print(...)` の中で呼べる。呼び出し結果に直接つなげる形（`newDisplay().clear()`）は未対応。
+- トップレベルのバインディング関数と、`@GoType` の値を持つレシーバ — ローカル変数、または別のバインディング呼び出しの戻り値（チェーン：`newDisplay().clear()`、任意の深さまで）— へのバインディングメソッド呼び出し（`display.drawText(...)`）を、文として（void 以外の戻り値は捨てられる）、ローカル変数の初期化子として、別のバインディング呼び出しの引数として、または `print(...)` の中で呼べる。
+- `@GoType` のバインディング値へのカスケード（`newDisplay()..clear()..drawText(...)`）を、文として、またはローカル変数の初期化子として使える。各カスケードのセクションは必ず素の `..method(args)` バインディング呼び出しでなければならない — v0.1 には自前のクラス・フィールドがないため、カスケードした getter/setter/添字セクションには対応する意味がない。
 - 戻り値・ローカル変数の型: `int`、`double`、`bool`、`String`、`@GoType` クラス。`@GoType` には値型（`'wio.Color'`）もポインタ（`'*wio.Display'`）も書ける（文字列をそのまま出力するのでどちらも動く）。
 - 引数: 上記の型のリテラル、ローカル変数、別のバインディング呼び出し、Go 定数の参照（`red`、`Color.red`）。Dart の `int` / `double` / `bool` / `String` 引数は Go の `int` / `float64` / `bool` / `string` に対応するので、Go 側のシグネチャもその型で宣言する（`uint8` が欲しい Go 側はバインディング内で変換する。トランスパイラはキャストを出力しない）。
 - Go の定数・パッケージ変数: `external` なトップレベル getter か `external static` getter に `@GoName` を付ける。インスタンス getter はバインディングにならない。値を返す Go メソッドは `external` メソッドとして公開する。
@@ -84,8 +85,6 @@ func (d *Display) Width() int                               { /* ... */ }
   包む（エラーは `panic` か `bool` の戻り値に正規化）。`wio.NewDisplay` が ILI9341/SPI の
   初期化をまとめているのと同じ。`@GoType` には `*` を含む正確な Go 型式を書く。
 - **enum：** Dart の `enum` に `@GoType('machine.Pin')`、各値に `@GoName('machine.D0')` を付けられる。
-- **チェーンとカスケード**をバインディングの戻り値に対して許可
-  （`newDisplay().clear()`、`newDisplay()..clear()..drawText(...)`）。
 - `tinygo_machine` バインディングの最初の API は `Pin.led` / `Pin(n)` /
   `configure(PinMode.output | PinMode.input)` / `high()` / `low()` / `toggle()` / `get()`。
   `machine.LED` や `machine.PinConfig{...}` は最初のルールに従い Go 側で吸収する。

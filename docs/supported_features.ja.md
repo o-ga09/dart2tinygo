@@ -29,9 +29,9 @@
 | `switch` | 実装済み（`int`/`String`/`bool` 式のみ。定数値の `case`、`default` に対応。連続する空の `case` は Go の `case a, b:` にまとめられる。`case ... when ...` ガードやデストラクチャリングパターンは未実装） |
 | `print` | 実装済み（任意の `String` 式、または文字列補間） |
 | 文字列補間 | `int` / `double` / `bool` / `String` の式が実装済み |
-| カスケード `..` | 未実装 |
+| カスケード `..` | 実装済み。`@GoType` のバインディング値のみ対応（`newDisplay()..clear()..drawText(...)`）。各セクションは必ず素の `..method(args)` バインディング呼び出しでなければならず、文として、またはローカル変数の初期化子として使える |
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
-| 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数と `@GoType` ローカル変数へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照）。呼び出し結果へのチェーンは未実装 |
+| 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数と、`@GoType` のレシーバ — ローカル変数、または（メソッドチェーン。任意の深さ）別のバインディング呼び出しの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
 | 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `double` の文字列補間に組み込み済み |
 | `tinygo_machine`: LED、GPIO入出力、スリープ | 未実装 |
 
