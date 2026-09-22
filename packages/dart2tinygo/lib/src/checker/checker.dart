@@ -23,7 +23,7 @@ class UnsupportedSyntaxError {
   String toString() => '$filePath:$line:$column: $reason';
 }
 
-/// v0.1 minimal scope only: a single `void main()` plus other top-level
+/// v0.0.2 minimal scope only: a single `void main()` plus other top-level
 /// functions (positional parameters only, `return`), all containing
 /// `int`/`double`/`bool`/`String`/`List<int>` locals, `while (cond)`, a
 /// single-variable C-style `for`, `break`/`continue`, `if`/`else if`/
@@ -69,7 +69,7 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
         result,
         declaration.offset,
         'top-level "${_declarationLabel(declaration)}" is not supported yet; '
-        'v0.1/v0.2 minimal scope only supports top-level functions, enum '
+        'v0.0.2 minimal scope only supports top-level functions, enum '
         'declarations, class declarations (no inheritance), and a single '
         'void main()',
       ),
@@ -108,7 +108,7 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
 /// binding enum whose constants map onto existing Go identifiers via
 /// `@GoName` — the enum counterpart of a `@GoType` class's `external
 /// static` getter constants (`Button.a` in `docs/writing_bindings.md`), but
-/// declared with `enum` syntax. v0.1 minimal scope: a plain name (no type
+/// declared with `enum` syntax. v0.0.2 minimal scope: a plain name (no type
 /// parameters), no `with`/`implements` clause, no extra fields or methods,
 /// and no constructor arguments on a constant. Recorded in
 /// `docs/mapping.md`.
@@ -125,7 +125,7 @@ List<UnsupportedSyntaxError> _checkEnumDeclaration(
       _error(
         result,
         declaration.offset,
-        'enum "$name" must not have type parameters in v0.1 minimal scope',
+        'enum "$name" must not have type parameters in v0.0.2 minimal scope',
       ),
     );
   }
@@ -134,7 +134,7 @@ List<UnsupportedSyntaxError> _checkEnumDeclaration(
       _error(
         result,
         declaration.offset,
-        'enum "$name" must not use "with"/"implements" in v0.1 minimal '
+        'enum "$name" must not use "with"/"implements" in v0.0.2 minimal '
         'scope',
       ),
     );
@@ -144,7 +144,7 @@ List<UnsupportedSyntaxError> _checkEnumDeclaration(
       _error(
         result,
         declaration.body.members.first.offset,
-        'enum "$name" must not declare fields or methods in v0.1 minimal '
+        'enum "$name" must not declare fields or methods in v0.0.2 minimal '
         'scope',
       ),
     );
@@ -170,7 +170,7 @@ List<UnsupportedSyntaxError> _checkEnumDeclaration(
           result,
           constant.arguments!.offset,
           'enum constant "$name.${constant.name.lexeme}" must not take '
-          'constructor arguments in v0.1 minimal scope',
+          'constructor arguments in v0.0.2 minimal scope',
         ),
       );
     }
@@ -195,7 +195,7 @@ String _enumName(EnumDeclaration declaration) {
   return namePart is NameWithTypeParameters ? namePart.typeName.lexeme : '?';
 }
 
-/// `class Foo { ... }` (#32, v0.2, `docs/mapping.md` "class (no
+/// `class Foo { ... }` (#32, v0.0.2, `docs/mapping.md` "class (no
 /// inheritance)"): no type parameters, no `extends`/`implements`/`with`
 /// clause or class modifier (`abstract`/`base`/`final`/`interface`/`mixin`/
 /// `sealed`); a field declares one of the supported types (no initializer —
@@ -223,7 +223,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$name" must not have type parameters in v0.2 minimal scope',
+        'class "$name" must not have type parameters in v0.0.2 minimal scope',
       ),
     );
   }
@@ -234,7 +234,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$name" must not use "extends"/"with"/"implements" in v0.2 '
+        'class "$name" must not use "extends"/"with"/"implements" in v0.0.2 '
         'minimal scope (no inheritance)',
       ),
     );
@@ -250,7 +250,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
         result,
         declaration.offset,
         'class "$name" must not use a class modifier (abstract/base/final/'
-        'interface/mixin/sealed) in v0.2 minimal scope',
+        'interface/mixin/sealed) in v0.0.2 minimal scope',
       ),
     );
   }
@@ -272,7 +272,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
             result,
             member.offset,
             'class "$name" member "${_stripImpl(member)}" is not supported '
-            'in v0.2 minimal scope',
+            'in v0.0.2 minimal scope',
           ),
         );
     }
@@ -283,7 +283,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$name" must declare exactly one constructor in v0.2 minimal '
+        'class "$name" must declare exactly one constructor in v0.0.2 minimal '
         'scope (no inheritance means there is no implicit default '
         'constructor to fall back on here)',
       ),
@@ -294,7 +294,7 @@ List<UnsupportedSyntaxError> _checkClassDeclaration(
         _error(
           result,
           extra.offset,
-          'class "$name" must declare exactly one constructor in v0.2 '
+          'class "$name" must declare exactly one constructor in v0.0.2 '
           'minimal scope',
         ),
       );
@@ -325,7 +325,7 @@ List<UnsupportedSyntaxError> _checkFieldDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$className" field must not be static in v0.2 minimal scope',
+        'class "$className" field must not be static in v0.0.2 minimal scope',
       ),
     );
     return errors;
@@ -335,7 +335,7 @@ List<UnsupportedSyntaxError> _checkFieldDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$className" field must not be "late" in v0.2 minimal scope',
+        'class "$className" field must not be "late" in v0.0.2 minimal scope',
       ),
     );
   }
@@ -344,7 +344,7 @@ List<UnsupportedSyntaxError> _checkFieldDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$className" field type must not be nullable ("T?") in v0.2 '
+        'class "$className" field type must not be nullable ("T?") in v0.0.2 '
         'minimal scope',
       ),
     );
@@ -356,7 +356,7 @@ List<UnsupportedSyntaxError> _checkFieldDeclaration(
           result,
           variable.offset,
           'class "$className" field "${variable.name.lexeme}" must not have '
-          'an initializer in v0.2 minimal scope; initialize it via the '
+          'an initializer in v0.0.2 minimal scope; initialize it via the '
           'constructor instead',
         ),
       );
@@ -390,7 +390,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
       _error(
         result,
         declaration.offset,
-        'class "$className" constructor must be unnamed in v0.2 minimal '
+        'class "$className" constructor must be unnamed in v0.0.2 minimal '
         'scope',
       ),
     );
@@ -403,7 +403,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
         result,
         declaration.offset,
         'class "$className" constructor must be a plain generative '
-        'constructor (no const/factory/external) in v0.2 minimal scope',
+        'constructor (no const/factory/external) in v0.0.2 minimal scope',
       ),
     );
   }
@@ -413,7 +413,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
         result,
         declaration.initializers.first.offset,
         'class "$className" constructor must not use an initializer list '
-        '(": field = expr, ...") in v0.2 minimal scope; use a "this.field" '
+        '(": field = expr, ...") in v0.0.2 minimal scope; use a "this.field" '
         'parameter or a field assignment in the constructor body instead',
       ),
     );
@@ -428,7 +428,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
             parameter.offset,
             'class "$className" constructor parameter '
             '"this.${parameter.name.lexeme}" must not be nullable ("T?") in '
-            'v0.2 minimal scope',
+            'v0.0.2 minimal scope',
           ),
         );
         continue;
@@ -468,7 +468,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
             parameter.offset,
             'class "$className" constructor parameter '
             '"${parameter.name?.lexeme ?? '?'}" must not be nullable ("T?") '
-            'in v0.2 minimal scope',
+            'in v0.0.2 minimal scope',
           ),
         );
         continue;
@@ -494,7 +494,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
         parameter.offset,
         'class "$className" constructor parameter '
         '"${parameter.name?.lexeme ?? '?'}" must be a "this.field" or plain '
-        'positional parameter in v0.2 minimal scope (no named, optional, or '
+        'positional parameter in v0.0.2 minimal scope (no named, optional, or '
         'default-valued parameters)',
       ),
     );
@@ -511,7 +511,7 @@ List<UnsupportedSyntaxError> _checkConstructorDeclaration(
         result,
         body.offset,
         'class "$className" constructor must have a block body { ... } or '
-        'no body (";") in v0.2 minimal scope',
+        'no body (";") in v0.0.2 minimal scope',
       ),
     );
   }
@@ -542,7 +542,7 @@ List<UnsupportedSyntaxError> _checkMethodDeclaration(
       _error(
         result,
         declaration.offset,
-        '$label must be a plain instance method in v0.2 minimal scope (no '
+        '$label must be a plain instance method in v0.0.2 minimal scope (no '
         'static/abstract/getter/setter/operator/external)',
       ),
     );
@@ -553,7 +553,7 @@ List<UnsupportedSyntaxError> _checkMethodDeclaration(
       _error(
         result,
         declaration.offset,
-        '$label must not have type parameters in v0.2 minimal scope',
+        '$label must not have type parameters in v0.0.2 minimal scope',
       ),
     );
   }
@@ -564,7 +564,7 @@ List<UnsupportedSyntaxError> _checkMethodDeclaration(
       _error(
         result,
         returnTypeAnnotation!.offset,
-        '$label return type must not be nullable ("T?") in v0.2 minimal '
+        '$label return type must not be nullable ("T?") in v0.0.2 minimal '
         'scope',
       ),
     );
@@ -590,7 +590,7 @@ List<UnsupportedSyntaxError> _checkMethodDeclaration(
           result,
           parameter.offset,
           '$label parameter "${parameter.name?.lexeme ?? '?'}" must be a '
-          'plain positional parameter in v0.2 minimal scope (no named, '
+          'plain positional parameter in v0.0.2 minimal scope (no named, '
           'optional, or default-valued parameters)',
         ),
       );
@@ -602,7 +602,7 @@ List<UnsupportedSyntaxError> _checkMethodDeclaration(
           result,
           parameter.offset,
           '$label parameter "${parameter.name?.lexeme ?? '?'}" must not be '
-          'nullable ("T?") in v0.2 minimal scope',
+          'nullable ("T?") in v0.0.2 minimal scope',
         ),
       );
       continue;
@@ -712,7 +712,7 @@ List<UnsupportedSyntaxError> _checkFunctionDeclaration(
           result,
           parameter.offset,
           'function "$name" parameter "${parameter.name?.lexeme ?? '?'}" '
-          'must be a plain positional parameter in v0.1 minimal scope (no '
+          'must be a plain positional parameter in v0.0.2 minimal scope (no '
           'named, optional, or default-valued parameters)',
         ),
       );
@@ -856,7 +856,7 @@ List<UnsupportedSyntaxError> _checkStatement(
         _error(
           result,
           statement.offset,
-          '"${_statementLabel(statement)}" is not supported in v0.1 minimal '
+          '"${_statementLabel(statement)}" is not supported in v0.0.2 minimal '
           'scope (only locals, while/for, break/continue, if/else if/else, '
           'return, print(...), sleep(...), and binding calls)',
         ),
@@ -876,7 +876,7 @@ List<UnsupportedSyntaxError> _checkLoopJump(
   if (label != null) {
     return [
       _error(result, statement.offset,
-          'labeled "$keyword" is not supported in v0.1 minimal scope'),
+          'labeled "$keyword" is not supported in v0.0.2 minimal scope'),
     ];
   }
   if (!insideLoop) {
@@ -888,7 +888,7 @@ List<UnsupportedSyntaxError> _checkLoopJump(
   return const [];
 }
 
-/// `for (var i = <init>; <cond>; <updater>) { ... }`: v0.1 minimal scope
+/// `for (var i = <init>; <cond>; <updater>) { ... }`: v0.0.2 minimal scope
 /// only covers the C-style form with exactly one declared loop variable, a
 /// required condition, and exactly one updater — the shape Go's own `for`
 /// syntax can represent directly (Go's post-clause is a single simple
@@ -901,10 +901,10 @@ List<UnsupportedSyntaxError> _checkForStatement(
   final parts = statement.forLoopParts;
   if (parts is! ForPartsWithDeclarations) {
     final reason = parts is ForEachParts
-        ? 'for-in loops are not supported in v0.1 minimal scope'
+        ? 'for-in loops are not supported in v0.0.2 minimal scope'
         : 'a for-loop initializer must declare the loop variable (e.g. '
             '"for (var i = 0; ...)"), reusing an existing variable is not '
-            'supported in v0.1 minimal scope';
+            'supported in v0.0.2 minimal scope';
     return [_error(result, parts.offset, reason)];
   }
 
@@ -916,7 +916,7 @@ List<UnsupportedSyntaxError> _checkForStatement(
       _error(
         result,
         parts.variables.offset,
-        'a for-loop initializer must declare exactly one variable in v0.1 '
+        'a for-loop initializer must declare exactly one variable in v0.0.2 '
         'minimal scope',
       ),
     );
@@ -956,7 +956,7 @@ List<UnsupportedSyntaxError> _checkForStatement(
       _error(
         result,
         parts.leftSeparator.offset,
-        'a for-loop must have a condition in v0.1 minimal scope (an '
+        'a for-loop must have a condition in v0.0.2 minimal scope (an '
         'infinite for-loop is not supported; use while (true) instead)',
       ),
     );
@@ -970,7 +970,7 @@ List<UnsupportedSyntaxError> _checkForStatement(
       _error(
         result,
         parts.rightSeparator.offset,
-        'a for-loop must have exactly one updater in v0.1 minimal scope '
+        'a for-loop must have exactly one updater in v0.0.2 minimal scope '
         '(Go\'s for-statement only allows a single post-clause statement)',
       ),
     );
@@ -1044,7 +1044,7 @@ List<UnsupportedSyntaxError> _checkUpdaterExpression(
       result,
       expression.offset,
       '"${_expressionLabel(expression)}" is not a supported for-loop '
-      'updater or statement in v0.1 minimal scope (only x++/x--/x+=.../'
+      'updater or statement in v0.0.2 minimal scope (only x++/x--/x+=.../'
       'binding calls)',
     ),
   ];
@@ -1052,7 +1052,7 @@ List<UnsupportedSyntaxError> _checkUpdaterExpression(
 
 const _compoundAssignmentOperators = {'+=', '-=', '*=', '/=', '%=', '~/='};
 
-/// `%=`/`~/=` only make sense on `int` in v0.1 minimal scope: `%=` goes
+/// `%=`/`~/=` only make sense on `int` in v0.0.2 minimal scope: `%=` goes
 /// through `dartrt.Mod` (see [_arithmeticOperators]), which is `int`-only,
 /// and Dart's floating-point `~/` isn't implemented.
 const _intOnlyCompoundAssignmentOperators = {'%=', '~/='};
@@ -1073,7 +1073,7 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
       _error(
         result,
         expression.offset,
-        'assignment operator "$op" is not supported in v0.1 minimal scope '
+        'assignment operator "$op" is not supported in v0.0.2 minimal scope '
         '(only +=/-=/*=//=/%=/~/=)',
       ),
     ];
@@ -1118,7 +1118,7 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
       _error(
         result,
         target.offset,
-        '"$op" is only supported on double locals in v0.1 minimal scope '
+        '"$op" is only supported on double locals in v0.0.2 minimal scope '
         '(Dart\'s "/" always returns double), got '
         '"${targetType.getDisplayString()}"; did you mean "~/=" for '
         'truncating int division?',
@@ -1195,13 +1195,13 @@ List<UnsupportedSyntaxError> _checkIfStatement(
   return errors;
 }
 
-/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }`: v0.1
+/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }`: v0.0.2
 /// minimal scope only covers a `switch` expression of type `int`/`String`/
 /// `bool` matched against constant-value cases (Go's `switch` has no pattern
 /// matching, guards, or destructuring — `docs/mapping.md`). Dart cases don't
 /// fall through, so neither does the generated Go, which is why no
 /// `insideSwitch` tracking is needed here: unlike C, a bare `break;` isn't
-/// required to end a case, so v0.1 doesn't special-case it inside `switch`
+/// required to end a case, so v0.0.2 doesn't special-case it inside `switch`
 /// (it's still only accepted where `insideLoop` already allows it).
 List<UnsupportedSyntaxError> _checkSwitchStatement(
   ResolvedUnitResult result,
@@ -1223,7 +1223,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
         statement.expression.offset,
         'switch expression has type '
         '"${scrutineeType?.getDisplayString() ?? '?'}", but only '
-        'int/String/bool/enum are supported in v0.1 minimal scope',
+        'int/String/bool/enum are supported in v0.0.2 minimal scope',
       ),
     );
   } else {
@@ -1236,7 +1236,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
         _error(
           result,
           member.offset,
-          'labeled switch cases are not supported in v0.1 minimal scope',
+          'labeled switch cases are not supported in v0.0.2 minimal scope',
         ),
       );
     }
@@ -1249,7 +1249,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
             _error(
               result,
               guardedPattern.whenClause!.offset,
-              '"case ... when ..." guards are not supported in v0.1 '
+              '"case ... when ..." guards are not supported in v0.0.2 '
               'minimal scope',
             ),
           );
@@ -1261,7 +1261,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
                 result,
                 pattern.offset,
                 'case pattern "${_stripImpl(pattern)}" is not supported in '
-                'v0.1 minimal scope (only constant int/String/bool values)',
+                'v0.0.2 minimal scope (only constant int/String/bool values)',
               ),
             );
           } else if (scrutineeSupported) {
@@ -1279,7 +1279,7 @@ List<UnsupportedSyntaxError> _checkSwitchStatement(
           _error(
             result,
             member.offset,
-            'case pattern "${_stripImpl(member)}" is not supported in v0.1 '
+            'case pattern "${_stripImpl(member)}" is not supported in v0.0.2 '
             'minimal scope (only constant int/String/bool values)',
           ),
         );
@@ -1317,7 +1317,7 @@ List<UnsupportedSyntaxError> _checkCaseValue(
         expression.offset,
         'case value "${_expressionLabel(expression)}" does not match the '
         'switch expression\'s type '
-        '"${scrutineeType.getDisplayString()}"; v0.1 minimal scope only '
+        '"${scrutineeType.getDisplayString()}"; v0.0.2 minimal scope only '
         'supports constant int/String/bool/enum values',
       ),
     ];
@@ -1407,7 +1407,7 @@ List<UnsupportedSyntaxError> _checkStatementExpression(
       result,
       expression.offset,
       'expression "${_expressionLabel(expression)}" is not supported in '
-      'v0.1/v0.2 minimal scope (only x++/x--, x+=.../-=/*=//=, field '
+      'v0.0.2 minimal scope (only x++/x--, x+=.../-=/*=//=, field '
       'writes, print(...), sleep(...), binding calls, and instance method '
       'calls)',
     ),
@@ -1682,7 +1682,7 @@ List<UnsupportedSyntaxError> _checkFieldWriteTarget(
       result,
       target.offset,
       'field write target "${_expressionLabel(target)}" is not supported in '
-      'v0.2 minimal scope',
+      'v0.0.2 minimal scope',
     ),
   ];
 }
@@ -1703,7 +1703,7 @@ List<UnsupportedSyntaxError> _checkFieldWrite(
       _error(
         result,
         expression.offset,
-        'assignment operator "$op" is not supported on a field in v0.2 '
+        'assignment operator "$op" is not supported on a field in v0.0.2 '
         'minimal scope (only =/+=/-=/*=//=/%=/~/=)',
       ),
     ];
@@ -1731,7 +1731,7 @@ List<UnsupportedSyntaxError> _checkFieldWrite(
         _error(
           result,
           target.offset,
-          '"$op" is only supported on int/double fields in v0.2 minimal '
+          '"$op" is only supported on int/double fields in v0.0.2 minimal '
           'scope, got "${targetType.getDisplayString()}"',
         ),
       ];
@@ -1753,7 +1753,7 @@ List<UnsupportedSyntaxError> _checkFieldWrite(
         _error(
           result,
           target.offset,
-          '"$op" is only supported on double fields in v0.2 minimal scope, '
+          '"$op" is only supported on double fields in v0.0.2 minimal scope, '
           'got "${targetType.getDisplayString()}"',
         ),
       ];
@@ -1824,7 +1824,7 @@ bool _isEnumType(DartType? type) =>
 
 /// `List<int>` maps to Go `[]byte` — see the `List<int>` section of
 /// `docs/mapping.md`. No other element type is supported —
-/// `List<double>`/`List<String>`/etc. stay out of v0.1 minimal scope.
+/// `List<double>`/`List<String>`/etc. stay out of v0.0.2 minimal scope.
 bool _isListOfInt(DartType? type) {
   if (type is! InterfaceType || !type.isDartCoreList) return false;
   final args = type.typeArguments;
@@ -1930,7 +1930,7 @@ List<UnsupportedSyntaxError> _checkExpression(
           result,
           operand.offset,
           'unary "-" operand has type "${type?.getDisplayString() ?? '?'}", '
-          'but v0.1 minimal scope only supports int/double',
+          'but v0.0.2 minimal scope only supports int/double',
         ),
       ];
     }
@@ -1940,7 +1940,7 @@ List<UnsupportedSyntaxError> _checkExpression(
     _error(
       result,
       expression.offset,
-      'expression "${_expressionLabel(expression)}" is not supported in v0.1 '
+      'expression "${_expressionLabel(expression)}" is not supported in v0.0.2 '
       'minimal scope (only int/double/bool/String literals, local variables, '
       'binding calls, Go constant references, comparisons, logical operators, '
       'and int arithmetic)',
@@ -1966,7 +1966,7 @@ const _intOnlyArithmeticOperators = {'~/', '%'};
 /// `double` arithmetic (`+`/`-`/`*`/`~/`/`%`/`/`) binary operators map 1:1
 /// onto Go (or, for `%`, onto `dartrt.Mod`), which uses the same tokens
 /// (`docs/mapping.md`). Every other operator (bitwise, `String`
-/// concatenation `+`) is out of v0.1 minimal scope.
+/// concatenation `+`) is out of v0.0.2 minimal scope.
 ///
 /// To keep the generator cast-free, both operands of a comparison,
 /// equality, or arithmetic operator must have the *same* supported type —
@@ -1987,7 +1987,7 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
       _error(
         result,
         expression.offset,
-        'binary operator "$op" is not supported in v0.1 minimal scope (only '
+        'binary operator "$op" is not supported in v0.0.2 minimal scope (only '
         'comparisons ==/!=/</<=/>/>=, logical &&/||, and arithmetic '
         '+, -, *, ~/, %, /)',
       ),
@@ -2029,7 +2029,7 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
           _error(
             result,
             expression.offset,
-            '"/" requires double operands in v0.1 minimal scope (Dart\'s "/" '
+            '"/" requires double operands in v0.0.2 minimal scope (Dart\'s "/" '
             'always returns double, even for two ints; convert with '
             '.toDouble() first), got "${leftType?.getDisplayString() ?? '?'}" '
             'and "${rightType?.getDisplayString() ?? '?'}"',
@@ -2043,7 +2043,7 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
           _error(
             result,
             expression.offset,
-            '"$op" is only supported for int operands in v0.1 minimal scope, '
+            '"$op" is only supported for int operands in v0.0.2 minimal scope, '
             'got "${leftType?.getDisplayString() ?? '?'}" and '
             '"${rightType?.getDisplayString() ?? '?'}"',
           ),
@@ -2065,7 +2065,7 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
             result,
             expression.offset,
             '"$op" requires both operands to be int, or both double'
-            '${op == '+' ? ', or both String' : ''}, in v0.1 minimal scope, '
+            '${op == '+' ? ', or both String' : ''}, in v0.0.2 minimal scope, '
             'got "${leftType?.getDisplayString() ?? '?'}" and '
             '"${rightType?.getDisplayString() ?? '?'}"',
           ),
@@ -2251,7 +2251,7 @@ List<UnsupportedSyntaxError>? _checkNumConversion(
       _error(
         result,
         target.offset,
-        '".$name()" requires a $requiredType receiver in v0.1 minimal '
+        '".$name()" requires a $requiredType receiver in v0.0.2 minimal '
         'scope, got "${targetType.getDisplayString()}"',
       ),
     ];
@@ -2417,7 +2417,7 @@ List<UnsupportedSyntaxError> _checkListLiteral(
         literal.offset,
         'list literal has type '
         '"${literal.staticType?.getDisplayString() ?? '?'}", but only '
-        'List<int> is supported in v0.1 minimal scope',
+        'List<int> is supported in v0.0.2 minimal scope',
       ),
     ];
   }
@@ -2477,7 +2477,7 @@ List<UnsupportedSyntaxError> _checkListIndexWrite(
         result,
         expression.offset,
         '"${expression.operator.lexeme}" is not supported on List<int> '
-        'indexing in v0.1 minimal scope (only plain "=")',
+        'indexing in v0.0.2 minimal scope (only plain "=")',
       ),
     ];
   }
@@ -2570,9 +2570,11 @@ List<UnsupportedSyntaxError> _checkBoundCall(
 }
 
 /// `a..b()..c()`: a cascade on a `@GoType` binding value. Every section
-/// must be a bare `..method(args)` binding call — v0.1 has no classes or
-/// fields of its own, so a cascaded getter/setter/index section (`..field`,
-/// `..field = v`, `..[i]`) has nothing meaningful to map onto.
+/// must be a bare `..method(args)` binding call — a `@GoType` binding
+/// declares no Dart fields of its own, so a cascaded getter/setter/index
+/// section (`..field`, `..field = v`, `..[i]`) has nothing meaningful to
+/// map onto (this doesn't extend to a plain Dart class's own fields
+/// either — cascades are only supported on `@GoType` binding values).
 List<UnsupportedSyntaxError> _checkCascadeExpression(
   ResolvedUnitResult result,
   CascadeExpression expression,
@@ -2601,7 +2603,7 @@ List<UnsupportedSyntaxError> _checkCascadeExpression(
           result,
           section.offset,
           'cascade section "${_expressionLabel(section)}" is not supported '
-          'in v0.1 minimal scope (only "..method(args)" binding calls)',
+          'in v0.0.2 minimal scope (only "..method(args)" binding calls)',
         ),
       );
       continue;

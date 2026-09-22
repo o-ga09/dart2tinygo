@@ -8,14 +8,13 @@ The CLI and the Dart → Go transpiler engine itself.
 
 - `bin/`: CLI entry point (`build`, `check`, and `flash` implemented)
 - `lib/src/frontend/`: Parsing and resolved AST retrieval (implemented, via `package:analyzer`'s `AnalysisContextCollection`)
-- `lib/src/checker/`: Detection and error reporting for unsupported syntax (implemented for the v0.1 minimal subset)
+- `lib/src/checker/`: Detection and error reporting for unsupported syntax (implemented for the v0.0.2 subset)
 - `lib/src/ir/`: Intermediate representation (optional, not used yet — the backend walks the resolved AST directly)
-- `lib/src/backend/`: Go code generation (implemented for the v0.1 minimal subset)
+- `lib/src/backend/`: Go code generation (implemented for the v0.0.2 subset)
 - `test/golden/`: Golden tests comparing `*.dart` input to `*.go` expected output
 
-**Status:** the v0.1 minimal subset is implemented — a single `void main()`
-with `int` locals, `while (true)`, `print(...)`, and `sleep(Duration(...))`.
-See [`docs/supported_features.md`](../../docs/supported_features.md) for the
+**Status:** v0.0.2 is implemented. See
+[`docs/supported_features.md`](../../docs/supported_features.md) for the
 exact scope and [`docs/mapping.md`](../../docs/mapping.md) for the
 conversion rules.
 

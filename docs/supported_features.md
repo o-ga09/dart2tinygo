@@ -4,7 +4,7 @@
 
 Any PR that adds a language feature must update this table.
 
-## v0.1
+## v0.0.2
 
 | Feature | Status |
 | --- | --- |
@@ -40,16 +40,16 @@ Any PR that adds a language feature must update this table.
 | `wio_terminal/sd`: microSD (FAT) | Implemented — a separate library (`import 'package:wio_terminal/sd.dart';`) and Go sub-package (`go/sd`, cgo `tinygo.org/x/tinyfs/fatfs`) so it doesn't grow every other program's build; `mountSdCard()`/`.isInserted()`/`.exists()`/`.readText()`/`.writeText()`/`.appendText()`/`.readBytes()`/`.writeBytes()`. Verified with `tinygo build -target=wioterminal`, end to end through `dart2tinygo build`. See [`writing_bindings.md`](./writing_bindings.md#splitting-a-heavy-dependency-into-its-own-go-sub-package-decided-2026-09-22) |
 | `wio_terminal/wifi`: Wi-Fi (RTL8720DN) + HTTP | Implemented — a separate library (`import 'package:wio_terminal/wifi.dart';`) and Go sub-package (`go/wifi`, `net/http` + `tinygo.org/x/drivers/rtl8720dn` via `netlink/probe`); `newWiFi()`/`.connect()`/`.isConnected()`/`.disconnect()`/`.ipAddress()`/`.httpGet()`/`.httpPost()`. Needs RTL8720DN firmware 2.1.2+ and `-stack-size=4KB` on `tinygo build`/`flash`. Verified with `tinygo build -target=wioterminal`, end to end through `dart2tinygo build`; not verified against a live access point (no hardware here). See [`writing_bindings.md`](./writing_bindings.md#splitting-a-heavy-dependency-into-its-own-go-sub-package-decided-2026-09-22) |
 | `wio_terminal/pins`: 40-pin header + Grove pin constants | Implemented — `WioPins.d0`...`.d8`/`.a0`...`.a8` (`lib/pins.dart`), sharing `tinygo_machine`'s own `Pin` type rather than a separate incompatible one; needed a `dart2tinygo` CLI fix (`localModuleReplacesOf`/`_withTransitiveLocalModules`) to propagate a binding's own local-module `replace` transitively into the generated `go.mod`, since Go's `replace` doesn't cross module boundaries on its own. Verified with `tinygo build -target=wioterminal`, end to end through `dart2tinygo build`. See [`writing_bindings.md`](./writing_bindings.md#sharing-a-gotype-across-binding-packages-decided-2026-09-22) |
+| Classes (fields, constructors, methods; no inheritance) | Implemented — `class Foo { ... }` maps to a Go `struct` + `NewFoo(...)` + pointer-receiver methods (instances are always `*Foo`); one plain generative constructor (`this.field`/plain positional parameters, no initializer list), fields of a supported type (no declaration-site initializer — set via the constructor), instance methods (same rules as a top-level function), field access and `this`/implicit-`this`, instance method calls, and `==`/`!=` (identity, like Go's own `==` on the pointer). `extends`/`implements`/`with`, class modifiers (`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`), generics, `static`, getters/setters/operators, nullable (`T?`) types, and named/const/factory constructors are rejected by the checker — see [`mapping.md`](./mapping.md#class-no-inheritance-decided-2026-09-22-implemented) |
 
 See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 `packages/dart2tinygo/test/golden/` for a worked example
 (`minimal_blink.dart` / `.go`).
 
-## v0.2
+## v0.0.3
 
 | Feature | Status |
 | --- | --- |
-| Classes (fields, constructors, methods; no inheritance) | Implemented — `class Foo { ... }` maps to a Go `struct` + `NewFoo(...)` + pointer-receiver methods (instances are always `*Foo`); one plain generative constructor (`this.field`/plain positional parameters, no initializer list), fields of a supported type (no declaration-site initializer — set via the constructor), instance methods (same rules as a top-level function), field access and `this`/implicit-`this`, instance method calls, and `==`/`!=` (identity, like Go's own `==` on the pointer). `extends`/`implements`/`with`, class modifiers (`abstract`/`base`/`final`/`interface`/`mixin`/`sealed`), generics, `static`, getters/setters/operators, nullable (`T?`) types, and named/const/factory constructors are rejected by the checker — see [`mapping.md`](./mapping.md#class-no-inheritance-decided-2026-09-22-implemented) |
 | `List<T>` → Go slice | Not implemented |
 | Bitwise operations, `int.toSigned(n)` | Not implemented |
 

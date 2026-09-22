@@ -4,7 +4,7 @@
 
 Record conversion rules here once they're decided.
 
-## v0.1 minimal transpile (decided, implemented)
+## v0.0.1 minimal transpile (decided, implemented)
 
 Scope: a single top-level `void main()` with `int` locals, `while (true)`,
 `print(...)`, and `sleep(Duration(...))`. Implemented in
@@ -124,7 +124,7 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 - `int`/`double` arithmetic (`+`/`-`/`*`, unary `-`, and the compound forms
   `+=`/`-=`/`*=`) is implemented for matching operands (both `int` or both
   `double`, no implicit promotion); `~/`/`%`/`~/=`/`%=` are `int`-only, `/`/
-  `/=` are `double`-only (Dart's `/` always returns `double`), see the v0.1
+  `/=` are `double`-only (Dart's `/` always returns `double`), see the v0.0.1
   table above.
 - `int` ⇄ `double` conversion (`.toDouble()`/`.toInt()`/`.round()`) is
   implemented, restricted to the direction each bridges (`.toDouble()` on
@@ -137,7 +137,7 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 Wi-Fi/HTTP bindings this exists for all speak `[]byte` (`io.Reader`/
 `io.Writer`, `strconv`, network buffers), and Dart itself uses `List<int>`
 as its byte-buffer type (`Uint8List` extends it). This is narrower than the
-`List<T>` → `[]T` mapping decided for v0.2 generically; other element types
+`List<T>` → `[]T` mapping decided for v0.0.3 generically; other element types
 (`List<double>`, `List<String>`, …) stay out of scope until then.
 
 Dart's element type is `int`, but Go's `[]byte` element type is `byte`
@@ -188,7 +188,7 @@ the same class of BMP/astral caveat every other option here also has.
 `switch` maps onto Go's own `switch`, which shares Dart 3's no-fallthrough
 semantics: neither language falls through into the next case by default, so
 the generator needs no `break` to terminate a case (a bare `break;` inside a
-`switch` case is not specially handled in v0.1 — it goes through the same
+`switch` case is not specially handled in v0.0.1 — it goes through the same
 "only inside a while/for loop" check as everywhere else, since none of the
 motivating use cases need it yet).
 
@@ -206,7 +206,7 @@ case.
 | `case a: /* nothing, falls into default */ default: <body>` | `default: <body>` (the `a` case is dropped, not merged) — Go's `default` has no value list, but it already matches any value no explicit `case` claims, which is exactly what an empty case falling into `default` means |
 | `case 'x':` / `case true:` / `case Mode.on:` | `case "x":` / `case true:` / `case ModeOn:` — the case value must be a literal (or, for an enum scrutinee, a constant of that same enum) of the scrutinee's own type, no implicit conversion |
 
-Out of scope for v0.1: `case ... when ...` guards, non-constant/destructuring
+Out of scope for v0.0.1: `case ... when ...` guards, non-constant/destructuring
 patterns, and `for-in`/`for-loop`-in-`switch` label targets.
 
 ## Cascades (decided 2026-09-22, implemented)
@@ -215,7 +215,7 @@ patterns, and `for-in`/`for-loop`-in-`switch` label targets.
 value and performs a sequence of calls on it without repeating the receiver
 — so it becomes a temporary plus a statement sequence, e.g.
 `Pin.led..configure(...)`. Restricted to a `@GoType` binding value, and
-every cascade section must be a bare `..method(args)` binding call (v0.1
+every cascade section must be a bare `..method(args)` binding call (v0.0.1
 has no classes/fields of its own to make a cascaded getter/setter/index
 section meaningful).
 
@@ -228,7 +228,7 @@ section meaningful).
 
 Two flavors, both declared with plain `enum` syntax — no type parameters,
 `with`/`implements` clause, extra fields/methods, or constructor arguments
-on a constant (v0.1 has no classes of its own to give an enum constant a
+on a constant (v0.0.1 has no classes of its own to give an enum constant a
 constructor to call).
 
 **A user enum** (no `@GoType`) becomes `type E int` plus a `const (...
@@ -269,7 +269,7 @@ int representation to index a name table with or compare.
 
 ## class (no inheritance) (decided 2026-09-22, implemented)
 
-v0.2, #32: `class Foo { ... }` becomes a Go `struct` + `func NewFoo(...) *Foo`
+#32: `class Foo { ... }` becomes a Go `struct` + `func NewFoo(...) *Foo`
 + pointer-receiver methods. Instances are always `*Foo` — Dart's reference
 semantics, and `==`/`!=` on two instances is identity (Dart's default),
 which is exactly what Go's own `==` on the `*Foo` pointer already does, so
@@ -316,10 +316,10 @@ story: `c.inc()` / `this.inc()` / bare `inc()` (implicit `this`) all become
 | `c1 == c2` | `c1 == c2` — pointer identity, same as Dart's default `==` |
 | a constructor with a non-empty body (`this.field` params only initialize; the body can reassign) | `<recv> := &Foo{...this.field inits...}` then the body's statements, then `return <recv>` — a trivial `this.field`-only constructor with no body skips the intermediate local and returns the struct literal directly |
 
-Out of scope for v0.2: inheritance/mixins/interfaces, generics, an
-initializer list (`: field = expr, ...`) for a derived field value (use a
-plain positional constructor parameter and a body statement instead, or a
-method), and operator overloading.
+Out of scope for now (future, depending on demand): inheritance/mixins/
+interfaces, generics, an initializer list (`: field = expr, ...`) for a
+derived field value (use a plain positional constructor parameter and a
+body statement instead, or a method), and operator overloading.
 
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
@@ -328,16 +328,16 @@ method), and operator overloading.
 | `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
 | `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
 | `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
-| `String` | `string`; `.length` → `len(s)` (byte length — see "List<int>" below for the rationale); `+` concatenation; `.substring`; no general indexing in v0.1 | impl. (literals/locals/binding results, `+`, `.substring()`, `.length`, `.codeUnits`) |
+| `String` | `string`; `.length` → `len(s)` (byte length — see "List<int>" below for the rationale); `+` concatenation; `.substring`; no general indexing in v0.0.1 | impl. (literals/locals/binding results, `+`, `.substring()`, `.length`, `.codeUnits`) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
 | `List<int>` | `[]byte` — see "List<int>" below | impl. |
-| `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
+| `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.0.3) |
 | `enum` | user enum: `type E int` + `const ( ... iota )` + a name table, `.index`/`.name`/`==`/`switch` — see "enum" above; `@GoType`/`@GoName` binding enum: the constant's `@GoName` value, verbatim | impl. |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) — see "class (no inheritance)" above | impl. |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker — see "Top-level functions" above | impl. |
-| `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
-| `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
-| `for-in` | → `range` | decided (v0.2) |
+| `if` / `else if` / `else` | direct; every branch must be a block (see the v0.0.1 table above) | impl. |
+| `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.0.1 table above | impl. |
+| `for-in` | → `range` | decided (v0.0.3) |
 | `switch` | `switch`; constant `int`/`String`/`bool`/user-`enum` cases only, no fallthrough, empty cases merge/drop — see "Switch statements" above | impl. |
 | cascade `a..b()..c()` on a `@GoType` binding value | temporary (or the local's own name, as an initializer) + statement sequence — see "Cascades" above | impl. |
 | method chaining `a().b()` on a binding call result | direct — see "Annotation bindings" above | impl. |

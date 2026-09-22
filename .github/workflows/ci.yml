@@ -57,7 +57,7 @@ jobs:
       - name: go test packages/dart2tinygo/go (dartrt)
         working-directory: packages/dart2tinygo/go
         run: go test ./...
-      - name: dart2tinygo build (v0.1 minimal golden case)
+      - name: dart2tinygo build (v0.0.1 minimal golden case)
         working-directory: packages/dart2tinygo
         run: dart run bin/dart2tinygo.dart build test/golden/minimal_blink.dart -o /tmp/dart2tinygo-out
       - name: tinygo build -target=${{ matrix.target }}

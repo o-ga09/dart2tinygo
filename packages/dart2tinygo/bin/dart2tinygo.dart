@@ -47,7 +47,7 @@ class CheckCommand extends Command<int> {
     final result = await resolveEntryPoint(entry);
     final errors = checkEntryPoint(result);
     if (errors.isEmpty) {
-      print('OK: $entry is within the v0.1 minimal supported subset.');
+      print('OK: $entry is within the v0.0.2 supported subset.');
       return 0;
     }
     for (final error in errors) {

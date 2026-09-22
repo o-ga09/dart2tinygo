@@ -49,7 +49,7 @@ void main() {
     return checkEntryPoint(result);
   }
 
-  test('accepts the v0.1 minimal subset', () async {
+  test('accepts the v0.0.1 minimal subset', () async {
     final errors = await checkSource('''
 import 'dart:io';
 

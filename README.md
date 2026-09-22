@@ -8,9 +8,11 @@
 
 An OSS transpiler that converts a subset of Dart into TinyGo source code, so it can run on microcontrollers.
 
-> **Status:** Early scaffolding. The v0.1 minimal transpile is implemented — a
-> single `void main()` with `int` locals, `while (true)`, `print(...)`,
-> `sleep(Duration(...))`, and calls into annotation bindings. See
+> **Status:** v0.0.2 is implemented. It covers the core language subset
+> (`int`/`double`/`bool`/`String`/`List<int>`, control flow, classes without
+> inheritance, `enum`, cascades, annotation bindings) plus full
+> `tinygo_machine` (GPIO/ADC/PWM) and Wio Terminal (LCD, buttons, buzzer,
+> sensors, accelerometer, IR, USB HID, microSD, Wi-Fi/HTTP) bindings. See
 > [supported features](./docs/supported_features.md) for the exact scope.
 
 ## What is this?
