@@ -339,17 +339,6 @@ void main() {
       expect(errors.single.reason, contains('int'));
     });
 
-    test('reports arithmetic on String operands', () async {
-      final errors = await checkSource('''
-void main() {
-  var s = 'a' + 'b';
-  print(s);
-}
-''');
-      expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('int'));
-    });
-
     // `var y = -s;` for a String `s` doesn't reach this check at all: Dart's
     // own analyzer has no `String.operator-`, so `y`'s inferred type is
     // already `InvalidType` and the surrounding local-variable check
@@ -551,6 +540,232 @@ void main() {
 }
 ''');
       expect(errors, isEmpty);
+    });
+  });
+
+  group('List<int>', () {
+    test('accepts a List<int> local with an explicit type argument', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[1, 2, 3];
+  print('\${data.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a List<int> local with an inferred literal', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = [1, 2, 3];
+  print('\${data.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts an empty List<int> with a declared type', () async {
+      final errors = await checkSource('''
+void main() {
+  List<int> data = [];
+  print('\${data.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts index read into an int local', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[1, 2, 3];
+  var x = data[0];
+  print('\$x');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts index write', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[1, 2, 3];
+  data[0] = 42;
+  var i = 1;
+  data[i] = data[0];
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts add() as a statement', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[1, 2, 3];
+  data.add(4);
+  var n = 5;
+  data.add(n);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a List<int> local as a binding-call argument', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  var data = <int>[1, 2, 3];
+  beep(data.length);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a list literal of non-int elements', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <double>[1.0, 2.0];
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('List<int>'));
+    });
+
+    test('reports index read/write on a non-local receiver', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = <int>[1, 2, 3][0];
+  print('\$x');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('local variable'));
+    });
+
+    test('reports add() with the wrong number of arguments', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[1, 2, 3];
+  data.add(1, 2);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('one argument'));
+    });
+
+    test('reports List<int> equality as unsupported', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = <int>[1];
+  var b = <int>[1];
+  if (a == b) {
+    print('same');
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('same type'));
+    });
+  });
+
+  group('String operations', () {
+    test('accepts .length on a String local and literal', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 'hello';
+  var n1 = s.length;
+  var n2 = 'hi'.length;
+  print('\$n1 \$n2');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts .codeUnits on a String local and literal', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 'hello';
+  var a = s.codeUnits;
+  var b = 'hi'.codeUnits;
+  print('\${a.length} \${b.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts String.fromCharCodes()', () async {
+      final errors = await checkSource('''
+void main() {
+  var data = <int>[104, 105];
+  var s = String.fromCharCodes(data);
+  print(s);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts substring() with one or two arguments', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 'hello world';
+  var a = s.substring(6);
+  var b = s.substring(0, 5);
+  print('\$a \$b');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts String + String', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 'hello';
+  var b = 'world';
+  var c = a + b;
+  print(c);
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test(
+        'accepts codeUnits round-tripped through fromCharCodes as a '
+        'binding-call argument', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  widget.show(1, 2, String.fromCharCodes('hi'.codeUnits));
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports String - and * as unsupported', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  var a = 'hello';
+  var b = 'world';
+  beep(a - b);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('String'));
+    });
+
+    test('reports substring() with the wrong number of arguments', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 'hello';
+  var a = s.substring();
+  print(a);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('argument'));
     });
   });
 
@@ -927,13 +1142,13 @@ import 'package:test_binding/test_binding.dart';
 
 void main() {
   final widget = newWidget();
-  widget.show(1, 2, 'a' + 'b');
+  widget.show(1, 2, 'a' - 'b');
   beep(1 & 2);
 }
 ''');
       expect(errors, hasLength(2));
       expect(errors[0].line, 5);
-      expect(errors[0].reason, contains('"+"'));
+      expect(errors[0].reason, contains('"-"'));
       expect(errors[1].line, 6);
       expect(errors[1].reason, contains('"&"'));
     });

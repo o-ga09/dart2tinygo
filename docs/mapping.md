@@ -84,6 +84,58 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
   `int`, `.toInt()`/`.round()` on `double`) so every generated Go cast is
   meaningful rather than a redundant identity conversion.
 
+## `List<int>` (decided 2026-09-22, implemented)
+
+`List<int>` maps to Go's `[]byte`, not `[]int` — the SD-card, I2C/UART, and
+Wi-Fi/HTTP bindings this exists for all speak `[]byte` (`io.Reader`/
+`io.Writer`, `strconv`, network buffers), and Dart itself uses `List<int>`
+as its byte-buffer type (`Uint8List` extends it). This is narrower than the
+`List<T>` → `[]T` mapping decided for v0.2 generically; other element types
+(`List<double>`, `List<String>`, …) stay out of scope until then.
+
+Dart's element type is `int`, but Go's `[]byte` element type is `byte`
+(`uint8`), so every read/write crosses that boundary with an explicit,
+generator-inserted cast — the same kind of deliberate conversion already
+used for `.toDouble()`/`.toInt()`/`.round()`, not a "no casts" violation:
+
+| Dart | Go |
+| --- | --- |
+| `<int>[1, 2, 3]` (or an inferred `[1, 2, 3]`) | `[]byte{byte(1), byte(2), byte(3)}` |
+| `data[i]` (read) | `int(data[i])` |
+| `data[i] = v;` (write; only plain `=`) | `data[i] = byte(v)` |
+| `data.add(v);` | `data = append(data, byte(v))` — Dart's `List.add` mutates in place and returns `void`; Go's `append` returns a new slice that must be reassigned |
+| `data.length` | `len(data)` |
+| `String.fromCharCodes(data)` | `string(data)` — a named constructor (`InstanceCreationExpression`, the same AST shape as `Duration(...)`), not a static method call |
+| `s.codeUnits` | `[]byte(s)` |
+
+List equality (`a == b`) is not supported: Go slices aren't comparable with
+`==` (a compile error, except against `nil`), so this is rejected by the
+existing "operands must have the same type" comparison rule, which never
+lists `List<int>` as a comparable type.
+
+## `String` operations (decided 2026-09-22, implemented)
+
+`.length` and `.substring` are **byte-indexed**, matching Go's own `len(s)`
+and `s[start:end]` exactly — not Dart's UTF-16 code-unit indexing. This
+supersedes an earlier placeholder in this doc that proposed
+`utf8.RuneCountInString` for `.length`: that was never implemented, and
+would have been its own imperfect approximation of Dart's semantics (Unicode
+code points, not UTF-16 code units — still wrong for astral characters,
+just differently), while also being unusable by `.substring`, which needs
+byte or rune indices, not code-unit ones, to slice Go's own `string`. Plain
+byte length/slicing is simpler, composes correctly with itself
+(`s.substring(0, s.length)` always returns the whole string), and is exact
+for the overwhelmingly common ASCII case (config keys, protocol headers,
+formatted numbers); it differs from Dart's result only for non-ASCII text,
+the same class of BMP/astral caveat every other option here also has.
+
+| Dart | Go |
+| --- | --- |
+| `a.length` (`a`: `String`) | `len(a)` |
+| `a + b` (`a`, `b`: `String`) | `a + b` — same token, same semantics as Go's own `+` |
+| `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
+| `a.codeUnits` | `[]byte(a)` (see "List<int>" above) |
+
 ## Type mapping table (decided 2026-09-22; "impl." marks what exists today)
 
 | Dart | Go | Status |
@@ -91,9 +143,10 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 | `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
 | `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
 | `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
-| `String` | `string`; `.length` → `utf8.RuneCountInString` (UTF-16 vs UTF-8 differ outside the BMP); no indexing in v0.1 | impl. (literals/locals/binding results; no operations yet) |
+| `String` | `string`; `.length` → `len(s)` (byte length — see "List<int>" below for the rationale); `+` concatenation; `.substring`; no general indexing in v0.1 | impl. (literals/locals/binding results, `+`, `.substring()`, `.length`, `.codeUnits`) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
-| `List<T>` | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
+| `List<int>` | `[]byte` — see "List<int>" below | impl. |
+| `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
 | `enum` | `type E int` + `const ( ... iota )`; `.index` is the value, `.name` via a string table | decided (v0.2) |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker | decided |

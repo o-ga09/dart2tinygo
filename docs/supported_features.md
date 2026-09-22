@@ -10,7 +10,9 @@ Any PR that adds a language feature must update this table.
 | --- | --- |
 | Types: `int` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
 | Types: `double` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
-| Types: `bool` / `String` | Partial: locals, literals, binding results/arguments, and (`bool`) comparison/logical operators; `String` operations not implemented |
+| Types: `bool` | Partial: locals, literals, binding results/arguments, comparison/logical operators |
+| Types: `String` | Implemented (locals, literals, binding results/arguments, comparison, `+` concatenation, `.length`, `.codeUnits`, `.substring()`, `String.fromCharCodes()`) |
+| Types: `List<int>` | Implemented (maps to Go `[]byte` — see [`mapping.md`](./mapping.md#listint-decided-2026-09-22-implemented); literals, index read/write, `.length`, `.add()`; other element types not implemented) |
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
@@ -20,7 +22,7 @@ Any PR that adds a language feature must update this table.
 | `x += y` / `-=` / `*=` | Implemented (`int`/`int` or `double`/`double` only) |
 | `x ~/= y` / `%=` | Implemented (`int` only; `~/=` is `x /= y`, `%=` is `x = dartrt.Mod(x, y)`) |
 | `x /= y` | Implemented (`double` only — Dart's `/` always returns `double`, so `int /= ...` isn't valid Dart to begin with; use `~/=` for `int`) |
-| Arithmetic `a + b` / `- ` / `*` / `/` / `~/` / `%` | Implemented (`+`/`-`/`*` on matching `int`/`int` or `double`/`double`; `~/`/`%` on `int`; `/` on `double`) |
+| Arithmetic `a + b` / `- ` / `*` / `/` / `~/` / `%` | Implemented (`+`/`-`/`*` on matching `int`/`int` or `double`/`double`, or `String`/`String` for `+`; `~/`/`%` on `int`; `/` on `double`) |
 | `int` ⇄ `double` conversion: `.toDouble()` / `.toInt()` / `.round()` | Implemented (`.toDouble()` on `int`; `.toInt()`/`.round()` on `double`) |
 | `if` / `else if` / `else` | Implemented (block-bodied branches; loops and `if` may nest freely) |
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |

@@ -529,6 +529,12 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
   }
 
   if (expression is AssignmentExpression) {
+    if (expression.leftHandSide is IndexExpression) {
+      // `data[i] = v;`: a List<int> index write. Every other assignment
+      // target (a bare local) goes through the compound-assignment path,
+      // which also handles reporting bare `=` there as unsupported.
+      return _checkListIndexWrite(result, expression);
+    }
     return _checkCompoundAssignment(result, expression);
   }
 
@@ -541,11 +547,14 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
           return _checkSleepCall(result, expression);
       }
     }
+    final listAdd = _checkListAdd(result, expression);
+    if (listAdd != null) return listAdd;
     if (_checkNumConversion(result, expression) != null ||
+        _checkStringMethod(result, expression) != null ||
         _bindingOf(expression) != null ||
         _describeBindingProblem(expression) != null) {
-      // A conversion or binding call as a statement; a non-void result is
-      // discarded.
+      // A conversion, String method, or binding call as a statement; a
+      // non-void result is discarded.
       return _checkExpression(result, expression);
     }
   }
@@ -636,9 +645,20 @@ bool _isSupportedType(DartType? type) =>
         type.isDartCoreDouble ||
         type.isDartCoreBool ||
         type.isDartCoreString ||
+        _isListOfInt(type) ||
         isGoType(type));
 
-const _supportedTypesLabel = 'int, double, bool, String, and @GoType binding';
+const _supportedTypesLabel =
+    'int, double, bool, String, List<int>, and @GoType binding';
+
+/// `List<int>` maps to Go `[]byte` — see the `List<int>` section of
+/// `docs/mapping.md`. No other element type is supported —
+/// `List<double>`/`List<String>`/etc. stay out of v0.1 minimal scope.
+bool _isListOfInt(DartType? type) {
+  if (type is! InterfaceType || !type.isDartCoreList) return false;
+  final args = type.typeArguments;
+  return args.length == 1 && args.single.isDartCoreInt;
+}
 
 /// Checks [expression] in value position (a local's initializer, a binding
 /// argument, an interpolated value): it must be something the generator can
@@ -656,15 +676,23 @@ List<UnsupportedSyntaxError> _checkExpression(
   }
   if (expression is Identifier) {
     if (expression.element is LocalVariableElement) return const [];
+    final builtinGetter = _checkBuiltinGetter(result, expression);
+    if (builtinGetter != null) return builtinGetter;
     if (_constantBindingOf(expression) != null) return const [];
     final bindingProblem = _describeBindingProblem(expression);
     if (bindingProblem != null) {
       return [_error(result, expression.offset, bindingProblem)];
     }
   }
+  if (expression is PropertyAccess) {
+    final builtinGetter = _checkBuiltinGetter(result, expression);
+    if (builtinGetter != null) return builtinGetter;
+  }
   if (expression is MethodInvocation) {
     final conversion = _checkNumConversion(result, expression);
     if (conversion != null) return conversion;
+    final stringMethod = _checkStringMethod(result, expression);
+    if (stringMethod != null) return stringMethod;
     if (_bindingOf(expression) != null) {
       return _checkBoundCall(result, expression);
     }
@@ -672,6 +700,16 @@ List<UnsupportedSyntaxError> _checkExpression(
     if (bindingProblem != null) {
       return [_error(result, expression.offset, bindingProblem)];
     }
+  }
+  if (expression is InstanceCreationExpression) {
+    final fromCharCodes = _checkFromCharCodes(result, expression);
+    if (fromCharCodes != null) return fromCharCodes;
+  }
+  if (expression is ListLiteral) {
+    return _checkListLiteral(result, expression);
+  }
+  if (expression is IndexExpression) {
+    return _checkIndexExpression(result, expression);
   }
   if (expression is ParenthesizedExpression) {
     return _checkExpression(result, expression.expression);
@@ -831,14 +869,20 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
           (rightType?.isDartCoreInt ?? false);
       final bothDouble = (leftType?.isDartCoreDouble ?? false) &&
           (rightType?.isDartCoreDouble ?? false);
-      if (!bothInt && !bothDouble) {
+      // `+` also does string concatenation, matching Go's own `+`
+      // (docs/mapping.md); `-`/`*` have no String meaning in Dart either.
+      final bothString = op == '+' &&
+          (leftType?.isDartCoreString ?? false) &&
+          (rightType?.isDartCoreString ?? false);
+      if (!bothInt && !bothDouble && !bothString) {
         errors.add(
           _error(
             result,
             expression.offset,
-            '"$op" requires both operands to be int, or both double, in '
-            'v0.1 minimal scope, got "${leftType?.getDisplayString() ?? '?'}" '
-            'and "${rightType?.getDisplayString() ?? '?'}"',
+            '"$op" requires both operands to be int, or both double'
+            '${op == '+' ? ', or both String' : ''}, in v0.1 minimal scope, '
+            'got "${leftType?.getDisplayString() ?? '?'}" and '
+            '"${rightType?.getDisplayString() ?? '?'}"',
           ),
         );
       }
@@ -949,6 +993,279 @@ List<UnsupportedSyntaxError>? _checkNumConversion(
         target.offset,
         '".$name()" requires a $requiredType receiver in v0.1 minimal '
         'scope, got "${targetType.getDisplayString()}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
+/// `.length` (`String` or `List<int>` receiver) and `.codeUnits` (`String`
+/// receiver) are built-in getters, not `@GoName` bindings: `x.length` maps
+/// to Go's `len(x)`, `s.codeUnits` to `[]byte(s)` (`docs/mapping.md`). Dart
+/// parses these as `PrefixedIdentifier` when the receiver is a bare
+/// identifier (`s.length`) and `PropertyAccess` otherwise (`'hi'.length`) —
+/// both shapes are handled here.
+///
+/// Returns `null` (not `[]`) when [expression] isn't one of these two
+/// getters, so the caller falls through to its usual identifier/binding
+/// handling instead of treating every unrecognized property as an error.
+List<UnsupportedSyntaxError>? _checkBuiltinGetter(
+  ResolvedUnitResult result,
+  Expression expression,
+) {
+  final Expression target;
+  final String name;
+  switch (expression) {
+    case PrefixedIdentifier():
+      target = expression.prefix;
+      name = expression.identifier.name;
+    case PropertyAccess():
+      final propertyTarget = expression.target;
+      if (propertyTarget == null) return null;
+      target = propertyTarget;
+      name = expression.propertyName.name;
+    default:
+      return null;
+  }
+  if (name != 'length' && name != 'codeUnits') return null;
+
+  final targetType = target.staticType;
+  final isString = targetType?.isDartCoreString ?? false;
+  if (name == 'codeUnits' && !isString) return null;
+  if (name == 'length' && !isString && !_isListOfInt(targetType)) return null;
+
+  return _checkExpression(result, target);
+}
+
+/// `String.fromCharCodes(bytes)` is a named constructor
+/// (`InstanceCreationExpression`, the same AST shape as `Duration(...)`),
+/// not a static method call — see `docs/mapping.md`. Maps to Go's
+/// `string(bytes)` conversion.
+///
+/// Returns `null` (not `[]`) when [creation] isn't this constructor.
+List<UnsupportedSyntaxError>? _checkFromCharCodes(
+  ResolvedUnitResult result,
+  InstanceCreationExpression creation,
+) {
+  final typeName = creation.constructorName.type.name.lexeme;
+  final constructorName = creation.constructorName.name?.name;
+  if (typeName != 'String' || constructorName != 'fromCharCodes') return null;
+
+  final args = creation.argumentList.arguments;
+  if (args.length != 1) {
+    return [
+      _error(
+        result,
+        creation.offset,
+        'String.fromCharCodes(...) must be called with exactly one argument',
+      ),
+    ];
+  }
+  final arg = args.single;
+  final argErrors = _checkExpression(result, arg);
+  if (argErrors.isNotEmpty) return argErrors;
+  if (!_isListOfInt(arg.staticType)) {
+    return [
+      _error(
+        result,
+        arg.offset,
+        'String.fromCharCodes(...) argument must be a List<int>, got '
+        '"${arg.staticType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
+/// `s.substring(start, [end])` on a `String` receiver, maps to Go's
+/// `x[start:end]` (or `x[start:]` with no `end`) slice syntax — byte-
+/// indexed, like Go's own strings (`docs/mapping.md`).
+///
+/// Returns `null` (not `[]`) when [call] isn't `.substring(...)`, so the
+/// caller falls through to its usual binding-call handling.
+List<UnsupportedSyntaxError>? _checkStringMethod(
+  ResolvedUnitResult result,
+  MethodInvocation call,
+) {
+  if (call.methodName.name != 'substring') return null;
+  final target = call.target;
+  if (target == null) return null;
+  final targetType = target.staticType;
+  if (targetType == null || !targetType.isDartCoreString) return null;
+
+  final errors = <UnsupportedSyntaxError>[
+    ..._checkExpression(result, target),
+  ];
+  final args = call.argumentList.arguments;
+  if (args.isEmpty || args.length > 2) {
+    errors.add(
+      _error(
+        result,
+        call.offset,
+        '"substring" takes one or two arguments (start, [end])',
+      ),
+    );
+    return errors;
+  }
+  for (final arg in args) {
+    final argErrors = _checkExpression(result, arg);
+    if (argErrors.isNotEmpty) {
+      errors.addAll(argErrors);
+      continue;
+    }
+    final argType = arg.staticType;
+    if (argType == null || !argType.isDartCoreInt) {
+      errors.add(
+        _error(
+          result,
+          arg.offset,
+          '"substring" arguments must be int, got '
+          '"${argType?.getDisplayString() ?? '?'}"',
+        ),
+      );
+    }
+  }
+  return errors;
+}
+
+/// `<int>[1, 2, 3]` (or a plain `[1, 2, 3]` inferred as `List<int>`) maps to
+/// Go's `[]byte{1, 2, 3}` — see the `List<int>` section of
+/// `docs/mapping.md`. Only literal `Expression` elements are supported — no
+/// spreads or `if`/`for` inside the literal.
+List<UnsupportedSyntaxError> _checkListLiteral(
+  ResolvedUnitResult result,
+  ListLiteral literal,
+) {
+  if (!_isListOfInt(literal.staticType)) {
+    return [
+      _error(
+        result,
+        literal.offset,
+        'list literal has type '
+        '"${literal.staticType?.getDisplayString() ?? '?'}", but only '
+        'List<int> is supported in v0.1 minimal scope',
+      ),
+    ];
+  }
+  final errors = <UnsupportedSyntaxError>[];
+  for (final element in literal.elements) {
+    if (element is! Expression) {
+      errors.add(
+        _error(
+          result,
+          element.offset,
+          '"${_stripImpl(element)}" is not supported inside a list literal',
+        ),
+      );
+      continue;
+    }
+    errors.addAll(_checkExpression(result, element));
+  }
+  return errors;
+}
+
+/// `data[i]` (read or write): [target] must be a local variable holding a
+/// `List<int>` — the same "must be a plain local, not an arbitrary
+/// expression" restriction used for binding methods and compound
+/// assignment. Shared by [_checkExpression] (read) and
+/// [_checkListIndexWrite] (write), since a Dart `IndexExpression` has the
+/// same shape either way; only the surrounding `AssignmentExpression`
+/// differs.
+List<UnsupportedSyntaxError> _checkIndexExpression(
+  ResolvedUnitResult result,
+  IndexExpression expression,
+) {
+  final target = expression.target;
+  if (target is! SimpleIdentifier ||
+      target.element is! LocalVariableElement ||
+      !_isListOfInt(target.staticType)) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'indexing "[...]" must be on a local variable holding a List<int>',
+      ),
+    ];
+  }
+  return _checkExpression(result, expression.index);
+}
+
+/// `data[i] = v;`: only plain `=` is supported (no `data[i] += v;` etc.),
+/// and `v` must be `int` (Go's `[]byte` element type needs an explicit
+/// `byte(v)` cast the generator adds, see `docs/mapping.md`).
+List<UnsupportedSyntaxError> _checkListIndexWrite(
+  ResolvedUnitResult result,
+  AssignmentExpression expression,
+) {
+  if (expression.operator.lexeme != '=') {
+    return [
+      _error(
+        result,
+        expression.offset,
+        '"${expression.operator.lexeme}" is not supported on List<int> '
+        'indexing in v0.1 minimal scope (only plain "=")',
+      ),
+    ];
+  }
+  final indexErrors =
+      _checkIndexExpression(result, expression.leftHandSide as IndexExpression);
+  if (indexErrors.isNotEmpty) return indexErrors;
+
+  final rhs = expression.rightHandSide;
+  final rhsErrors = _checkExpression(result, rhs);
+  if (rhsErrors.isNotEmpty) return rhsErrors;
+  final rhsType = rhs.staticType;
+  if (rhsType == null || !rhsType.isDartCoreInt) {
+    return [
+      _error(
+        result,
+        rhs.offset,
+        'List<int> index assignment requires an int value, got '
+        '"${rhsType?.getDisplayString() ?? '?'}"',
+      ),
+    ];
+  }
+  return const [];
+}
+
+/// `data.add(v);` as a statement (`List.add` returns `void` in Dart, so it
+/// never appears in value position): maps to Go's `data = append(data,
+/// byte(v))`.
+///
+/// Returns `null` (not `[]`) when [call] isn't `.add(...)` on a `List<int>`
+/// local, so the caller falls through to its usual binding-call handling.
+List<UnsupportedSyntaxError>? _checkListAdd(
+  ResolvedUnitResult result,
+  MethodInvocation call,
+) {
+  if (call.methodName.name != 'add') return null;
+  final target = call.target;
+  if (target is! SimpleIdentifier ||
+      target.element is! LocalVariableElement ||
+      !_isListOfInt(target.staticType)) {
+    return null;
+  }
+  final args = call.argumentList.arguments;
+  if (args.length != 1) {
+    return [
+      _error(
+        result,
+        call.offset,
+        'add(...) must be called with exactly one argument',
+      ),
+    ];
+  }
+  final arg = args.single;
+  final argErrors = _checkExpression(result, arg);
+  if (argErrors.isNotEmpty) return argErrors;
+  final argType = arg.staticType;
+  if (argType == null || !argType.isDartCoreInt) {
+    return [
+      _error(
+        result,
+        arg.offset,
+        'add(...) argument must be int, got '
+        '"${argType?.getDisplayString() ?? '?'}"',
       ),
     ];
   }

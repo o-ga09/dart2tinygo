@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart';
 import 'package:dart2tinygo/src/frontend/bindings.dart';
 
 /// The result of converting a checked entry point to Go source, per
@@ -215,6 +216,15 @@ void _writeExpressionStatement(
   GoDeps deps, {
   required String indent,
 }) {
+  if (expression is AssignmentExpression &&
+      expression.leftHandSide is IndexExpression) {
+    // `data[i] = v;`: not a compound assignment, so it doesn't go through
+    // _writeUpdaterExpression (whose AssignmentExpression case assumes a
+    // bare local target).
+    _writeListIndexWrite(expression, out, deps, indent: indent);
+    return;
+  }
+
   if (expression is PostfixExpression || expression is AssignmentExpression) {
     out.writeln('$indent${_writeUpdaterExpression(expression, deps)}');
     return;
@@ -238,6 +248,11 @@ void _writeExpressionStatement(
           return;
       }
     }
+    final listAdd = _writeListAdd(expression, deps);
+    if (listAdd != null) {
+      out.writeln('$indent$listAdd');
+      return;
+    }
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) {
       out.writeln('$indent$bound');
@@ -250,6 +265,42 @@ void _writeExpressionStatement(
     '${expression.runtimeType}. This is a bug: checkEntryPoint() should '
     'have rejected it first.',
   );
+}
+
+/// `data[i] = v;`: Go's `[]byte` element type is `byte`, but Dart's `v` is
+/// `int`, so the write needs an explicit `byte(v)` cast — the read side
+/// gets the matching `int(...)` cast in `_writeExpression`'s
+/// `IndexExpression` case. Recorded in `docs/mapping.md`.
+void _writeListIndexWrite(
+  AssignmentExpression expression,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  final index = expression.leftHandSide as IndexExpression;
+  final target = (index.target as SimpleIdentifier).name;
+  final indexValue = _writeExpression(index.index, deps);
+  final rhs = _writeExpression(expression.rightHandSide, deps);
+  out.writeln('$indent$target[$indexValue] = byte($rhs)');
+}
+
+/// `data.add(v);`: `List.add` mutates in place and returns `void` in Dart;
+/// Go's `append` returns a new slice that must be reassigned. `byte(v)` for
+/// the same reason as index writes. Recorded in `docs/mapping.md`.
+///
+/// Returns `null` (not writing anything) when [call] isn't `.add(...)` on a
+/// `List<int>` — the checker (`_checkListAdd`) already confirmed the shape
+/// for any call that reaches here as a statement, but this still checks the
+/// receiver type to correctly fall through to [_writeBoundCall] for an
+/// ordinary binding method that happens to be named `add`.
+String? _writeListAdd(MethodInvocation call, GoDeps deps) {
+  if (call.methodName.name != 'add') return null;
+  final target = call.target;
+  if (target is! SimpleIdentifier || !_isListOfInt(target.staticType)) {
+    return null;
+  }
+  final value = _writeExpression(call.argumentList.arguments.single, deps);
+  return '${target.name} = append(${target.name}, byte($value))';
 }
 
 /// A for-loop updater or a compound-assignment statement: `x++`/`x--` map
@@ -357,15 +408,39 @@ String _writeExpression(Expression expression, GoDeps deps) {
     return _goStringLiteral(expression.value);
   }
   if (expression is Identifier) {
+    final builtinGetter = _writeBuiltinGetter(expression, deps);
+    if (builtinGetter != null) return builtinGetter;
     final constant = _writeConstantReference(expression, deps);
     if (constant != null) return constant;
     return expression.name;
   }
+  if (expression is PropertyAccess) {
+    final builtinGetter = _writeBuiltinGetter(expression, deps);
+    if (builtinGetter != null) return builtinGetter;
+  }
   if (expression is MethodInvocation) {
     final conversion = _writeNumConversion(expression, deps);
     if (conversion != null) return conversion;
+    final substring = _writeSubstring(expression, deps);
+    if (substring != null) return substring;
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) return bound;
+  }
+  if (expression is InstanceCreationExpression) {
+    final fromCharCodes = _writeFromCharCodes(expression, deps);
+    if (fromCharCodes != null) return fromCharCodes;
+  }
+  if (expression is ListLiteral) {
+    final elements = expression.elements
+        .cast<Expression>()
+        .map((element) => 'byte(${_writeExpression(element, deps)})')
+        .join(', ');
+    return '[]byte{$elements}';
+  }
+  if (expression is IndexExpression) {
+    final target = _writeExpression(expression.target!, deps);
+    final index = _writeExpression(expression.index, deps);
+    return 'int($target[$index])';
   }
   if (expression is ParenthesizedExpression) {
     return '(${_writeExpression(expression.expression, deps)})';
@@ -430,6 +505,68 @@ String? _writeNumConversion(MethodInvocation call, GoDeps deps) {
     default:
       return null;
   }
+}
+
+/// `.length` (`String` or `List<int>` receiver) and `.codeUnits` (`String`
+/// receiver) — see checker.dart's `_checkBuiltinGetter` for the two AST
+/// shapes this recognizes (`PrefixedIdentifier` for a bare-identifier
+/// receiver, `PropertyAccess` otherwise). `.length` → Go's `len(x)` (works
+/// for both `string` and `[]byte`); `.codeUnits` → `[]byte(s)`.
+/// `docs/mapping.md`.
+String? _writeBuiltinGetter(Expression expression, GoDeps deps) {
+  final Expression target;
+  final String name;
+  switch (expression) {
+    case PrefixedIdentifier():
+      target = expression.prefix;
+      name = expression.identifier.name;
+    case PropertyAccess():
+      final propertyTarget = expression.target;
+      if (propertyTarget == null) return null;
+      target = propertyTarget;
+      name = expression.propertyName.name;
+    default:
+      return null;
+  }
+  if (name != 'length' && name != 'codeUnits') return null;
+  final value = _writeExpression(target, deps);
+  return name == 'codeUnits' ? '[]byte($value)' : 'len($value)';
+}
+
+/// `String.fromCharCodes(bytes)`, a named constructor
+/// (`InstanceCreationExpression`, the same AST shape as `Duration(...)`) →
+/// Go's `string(bytes)` conversion. `docs/mapping.md`.
+String? _writeFromCharCodes(InstanceCreationExpression creation, GoDeps deps) {
+  final typeName = creation.constructorName.type.name.lexeme;
+  final constructorName = creation.constructorName.name?.name;
+  if (typeName != 'String' || constructorName != 'fromCharCodes') return null;
+  final value = _writeExpression(creation.argumentList.arguments.single, deps);
+  return 'string($value)';
+}
+
+/// `s.substring(start, [end])` on a `String` receiver → Go's
+/// `x[start:end]` (or `x[start:]` with no `end`) slice syntax.
+/// `docs/mapping.md`.
+String? _writeSubstring(MethodInvocation call, GoDeps deps) {
+  if (call.methodName.name != 'substring') return null;
+  final target = call.target;
+  if (target == null) return null;
+  final targetType = target.staticType;
+  if (targetType == null || !targetType.isDartCoreString) return null;
+
+  final value = _writeExpression(target, deps);
+  final args = call.argumentList.arguments;
+  final start = _writeExpression(args[0], deps);
+  if (args.length == 1) return '$value[$start:]';
+  final end = _writeExpression(args[1], deps);
+  return '$value[$start:$end]';
+}
+
+/// `List<int>` maps to Go `[]byte` — see checker.dart's `_isListOfInt`.
+bool _isListOfInt(DartType? type) {
+  if (type is! InterfaceType || !type.isDartCoreList) return false;
+  final args = type.typeArguments;
+  return args.length == 1 && args.single.isDartCoreInt;
 }
 
 /// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes

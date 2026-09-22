@@ -79,6 +79,54 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
   方向にのみ限定する（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に）ことで、
   生成する Go のキャストが意味のないもの（恒等変換）にならないようにしている。
 
+## `List<int>`（2026-09-22 決定、実装済み）
+
+`List<int>` は Go の `[]byte` に対応する（`[]int` ではない）。この機能が存在する理由である
+SD カード・I2C/UART・Wi-Fi/HTTP のバインディングはすべて `[]byte`（`io.Reader`/`io.Writer`、
+`strconv`、ネットワークバッファ）でやり取りするし、Dart 自身も `List<int>` をバイトバッファの
+型として使う（`Uint8List` は `List<int>` を継承する）。これは v0.2 で決めた汎用の
+`List<T>` → `[]T` より狭いスコープで、`int` 以外の要素型（`List<double>`、`List<String>` など）
+は v0.2 まで対象外のまま。
+
+Dart 側の要素型は `int` だが、Go の `[]byte` の要素型は `byte`（`uint8`）なので、
+読み書きのたびにこの境界を明示的なキャストで越える — これは `.toDouble()`/`.toInt()`/
+`.round()` で既に使っている「意図的な変換」と同じ種類のもので、「キャストなし」原則への
+違反ではない：
+
+| Dart | Go |
+| --- | --- |
+| `<int>[1, 2, 3]`（または推論された `[1, 2, 3]`） | `[]byte{byte(1), byte(2), byte(3)}` |
+| `data[i]`（読み取り） | `int(data[i])` |
+| `data[i] = v;`（書き込み。プレーンな `=` のみ） | `data[i] = byte(v)` |
+| `data.add(v);` | `data = append(data, byte(v))` — Dart の `List.add` はその場で変更し `void` を返すが、Go の `append` は新しいスライスを返すので再代入が必要 |
+| `data.length` | `len(data)` |
+| `String.fromCharCodes(data)` | `string(data)` — 名前付きコンストラクタ（`Duration(...)` と同じ `InstanceCreationExpression`）であり、static メソッド呼び出しではない |
+| `s.codeUnits` | `[]byte(s)` |
+
+リストの等価比較（`a == b`）は未対応：Go のスライスは（`nil` との比較を除いて）
+`==` で比較できない（コンパイルエラーになる）ため、既存の「両辺が同じ型でなければ
+ならない」比較ルールが `List<int>` を比較可能な型として挙げていないことで、自然に拒否される。
+
+## `String` 操作（2026-09-22 決定、実装済み）
+
+`.length` と `.substring` は Go 自身の `len(s)` / `s[start:end]` と全く同じ**バイト単位**の
+インデックスで動作する — Dart の UTF-16 コード単位インデックスとは異なる。これは、この文書に
+以前あった `.length` を `utf8.RuneCountInString` にするという未実装のプレースホルダに代わる
+決定：それも Dart の意味論を独自に近似したもの（UTF-16 コード単位ではなく Unicode コード
+ポイント — astral 文字ではやはりずれるが、ずれ方が違うだけ）に過ぎず、しかも `.substring` は
+Go の `string` をスライスするのにバイトかルーンのインデックスが必要で、コード単位インデックス
+では使えない。単純なバイト長／バイトスライスの方がシンプルで、自分自身と整合する
+（`s.substring(0, s.length)` は常に全体を返す）し、圧倒的に多い ASCII のケース（設定キー、
+プロトコルヘッダ、数値の文字列化）では正確。Dart の結果とずれるのは非 ASCII テキストのときだけで、
+ここに挙げた他の選択肢もすべて抱える BMP／astral のクラスの制約と同じもの。
+
+| Dart | Go |
+| --- | --- |
+| `a.length`（`a`: `String`） | `len(a)` |
+| `a + b`（`a`、`b`: `String`） | `a + b` — Go 自身の `+` と同じ記号・同じ意味論 |
+| `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
+| `a.codeUnits` | `[]byte(a)`（上の「List<int>」を参照） |
+
 ## 型対応表（2026-09-22 決定。「実装済」は現時点で存在するもの）
 
 | Dart | Go | 状態 |
@@ -86,9 +134,10 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 | `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入、`.toDouble()`） |
 | `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、文字列補間） |
 | `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値、比較・論理演算子、`if`） |
-| `String` | `string`。`.length` → `utf8.RuneCountInString`（BMP 外では UTF-16 と UTF-8 で差が出る）。v0.1 では添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値。操作は未実装） |
+| `String` | `string`。`.length` → `len(s)`（バイト長。理由は下の「List<int>」を参照）。`+` 連結、`.substring`。v0.1 では一般の添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`、`.substring()`、`.length`、`.codeUnits`） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
-| `List<T>` | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
+| `List<int>` | `[]byte` — 下の「List<int>」を参照 | 実装済 |
+| `List<T>`（`T` が `int` 以外） | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.2） |
 | `enum` | `type E int` + `const ( ... iota )`。`.index` は値そのもの、`.name` は文字列テーブル | 決定（v0.2） |
 | クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） | 決定（v0.2） |
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 | 決定 |
