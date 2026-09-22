@@ -65,58 +65,198 @@ void main() {
     expect(errors, isEmpty);
   });
 
-  test('reports if statements with file/line/reason', () async {
-    final errors = await checkSource('''
+  group('if statements', () {
+    test('accepts if / else if / else with a bool literal condition', () async {
+      final errors = await checkSource('''
 void main() {
   if (true) {
+    print('hi');
+  } else if (false) {
+    print('bye');
+  } else {
+    print('neither');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts a bool local as the condition, with no else', () async {
+      final errors = await checkSource('''
+void main() {
+  var ready = true;
+  if (ready) {
+    print('ready');
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts if nested inside while, and nested if/else', () async {
+      final errors = await checkSource('''
+void main() {
+  var count = 0;
+  while (true) {
+    if (count > 0) {
+      if (count > 10) {
+        print('big');
+      } else {
+        print('small');
+      }
+    }
+    count++;
+  }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports a non-bool condition with file/line/reason', () async {
+      final errors = await checkSource('''
+void main() {
+  var count = 0;
+  if (count) {
     print('hi');
   }
 }
 ''');
-    expect(errors, hasLength(1));
-    expect(errors.single.line, 2);
-    expect(errors.single.reason, contains('IfStatement'));
-    expect(errors.single.filePath, endsWith('entry.dart'));
-  });
+      expect(errors, hasLength(1));
+      expect(errors.single.line, 3);
+      expect(errors.single.reason, contains('bool'));
+      expect(errors.single.filePath, endsWith('entry.dart'));
+    });
 
-  test('accepts int/double/bool/String literal locals', () async {
-    final errors = await checkSource('''
+    test('reports an if branch without a block', () async {
+      final errors = await checkSource('''
 void main() {
-  var count = 0;
-  var ratio = 0.5;
-  double whole = 2;
-  final ready = true;
-  const name = 'hi';
-  print('\$count \$ready \$name');
-  print(name);
+  if (true) print('hi');
 }
 ''');
-    expect(errors, isEmpty);
-  });
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('block'));
+    });
 
-  test('reports locals of unsupported types', () async {
-    final errors = await checkSource('''
+    test('reports an else branch without a block', () async {
+      final errors = await checkSource('''
 void main() {
-  var d = const Duration(seconds: 1);
-  var xs = [1, 2];
+  if (true) {
+    print('hi');
+  } else print('bye');
 }
 ''');
-    expect(errors, hasLength(2));
-    expect(errors[0].line, 2);
-    expect(errors[0].reason, contains('"Duration"'));
-    expect(errors[0].reason, contains('int, double, bool, String'));
-    expect(errors[1].line, 3);
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('block'));
+    });
+
+    test('reports while nested inside if as out of scope', () async {
+      final errors = await checkSource('''
+void main() {
+  if (true) {
+    while (true) {
+      print('hi');
+    }
+  }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('WhileStatement'));
+    });
   });
 
-  test('reports unsupported local initializers', () async {
-    final errors = await checkSource('''
+  group('comparison and logical operators', () {
+    test('accepts ==, !=, <, <=, >, >= on matching int/double operands',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var b = 2;
+  var x = 1.5;
+  var y = 2.5;
+  if (a == b) { print('1'); }
+  if (a != b) { print('2'); }
+  if (a < b) { print('3'); }
+  if (a <= b) { print('4'); }
+  if (a > b) { print('5'); }
+  if (a >= b) { print('6'); }
+  if (x < y) { print('7'); }
+  if (true == false) { print('8'); }
+  if ('a' == 'b') { print('9'); }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts && / || / ! combined and parenthesized', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = true;
+  var b = false;
+  if (a && b) { print('1'); }
+  if (a || b) { print('2'); }
+  if (!a) { print('3'); }
+  if (!(a && b) || (b && !a)) { print('4'); }
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports comparison of mismatched types', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var x = 1.5;
+  if (a == x) { print('hi'); }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('same type'));
+    });
+
+    test('reports ordering comparisons on bool/String operands', () async {
+      final errors = await checkSource('''
+void main() {
+  if ('a' < 'b') { print('hi'); }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('int and double'));
+    });
+
+    test('reports && / || with a non-bool operand', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  var b = true;
+  if (a && b) { print('hi'); }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('bool'));
+    });
+
+    test('reports ! on a non-bool operand', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = 1;
+  if (!a) { print('hi'); }
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('bool'));
+    });
+
+    test('reports unsupported binary operators', () async {
+      final errors = await checkSource('''
 void main() {
   var sum = 1 + 2;
+  if (sum > 0) { print('hi'); }
 }
 ''');
-    expect(errors, hasLength(1));
-    expect(errors.single.line, 2);
-    expect(errors.single.reason, contains('BinaryExpression'));
+      expect(errors, hasLength(1));
+      expect(errors.single.line, 2);
+      expect(errors.single.reason, contains('"+"'));
+    });
   });
 
   test('reports double interpolation as not supported yet', () async {
@@ -227,7 +367,7 @@ void main() {
 ''');
       expect(errors, hasLength(2));
       expect(errors[0].line, 5);
-      expect(errors[0].reason, contains('BinaryExpression'));
+      expect(errors[0].reason, contains('"+"'));
       expect(errors[1].line, 6);
     });
 

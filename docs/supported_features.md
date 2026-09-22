@@ -9,12 +9,14 @@ Any PR that adds a language feature must update this table.
 | Feature | Status |
 | --- | --- |
 | Types: `int` | Implemented (locals, literals, binding results; no arithmetic yet) |
-| Types: `double` / `bool` / `String` | Partial: locals, literals, and binding results/arguments only (no arithmetic, comparison, or `String` operations yet) |
+| Types: `double` / `bool` / `String` | Partial: locals, literals, binding results/arguments, and (`bool`) comparison/logical operators; no arithmetic or `String` operations yet |
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented (minimal: a single parameterless `void main()`, no other top-level functions) |
 | `while` | Implemented (minimal: `while (true)` only, no nesting) |
-| `if` / `for` / `switch` | Not implemented |
+| `if` / `else if` / `else` | Implemented (block-bodied branches; may nest inside `while` and inside other `if`, but not the other way around — `while` still can't nest) |
+| Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
+| `for` / `switch` | Not implemented |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
 | String interpolation | Implemented for `int` / `bool` / `String` expressions; `double` not implemented |
 | Cascade `..` | Not implemented |

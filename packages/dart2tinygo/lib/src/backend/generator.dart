@@ -106,12 +106,58 @@ void _writeStatement(
       _writeExpressionStatement(statement.expression, out, deps,
           indent: indent);
 
+    case IfStatement():
+      _writeIfStatement(statement, out, deps, indent: indent);
+
     default:
       throw StateError(
         'generator received unchecked statement: ${statement.runtimeType}. '
         'This is a bug: checkEntryPoint() should have rejected it first.',
       );
   }
+}
+
+/// `if (cond) { ... } else if (cond2) { ... } else { ... }` maps 1:1 onto Go,
+/// which has the same `if`/`else if`/`else` shape. `else if` is Dart's own
+/// `elseStatement` being another `IfStatement` (see `checker.dart`), so
+/// recursing on it here reproduces the chain; a plain `else` block ends it.
+void _writeIfStatement(
+  IfStatement statement,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  out.writeln('${indent}if ${_writeExpression(statement.expression, deps)} {');
+  for (final inner in (statement.thenStatement as Block).statements) {
+    _writeStatement(inner, out, deps, indent: '$indent\t');
+  }
+  _writeElseBranch(statement.elseStatement, out, deps, indent: indent);
+}
+
+void _writeElseBranch(
+  Statement? elseStatement,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  if (elseStatement == null) {
+    out.writeln('$indent}');
+    return;
+  }
+  if (elseStatement is IfStatement) {
+    final condition = _writeExpression(elseStatement.expression, deps);
+    out.writeln('$indent} else if $condition {');
+    for (final inner in (elseStatement.thenStatement as Block).statements) {
+      _writeStatement(inner, out, deps, indent: '$indent\t');
+    }
+    _writeElseBranch(elseStatement.elseStatement, out, deps, indent: indent);
+    return;
+  }
+  out.writeln('$indent} else {');
+  for (final inner in (elseStatement as Block).statements) {
+    _writeStatement(inner, out, deps, indent: '$indent\t');
+  }
+  out.writeln('$indent}');
 }
 
 void _writeExpressionStatement(
@@ -245,6 +291,19 @@ String _writeExpression(Expression expression, GoDeps deps) {
   if (expression is MethodInvocation) {
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) return bound;
+  }
+  if (expression is ParenthesizedExpression) {
+    return '(${_writeExpression(expression.expression, deps)})';
+  }
+  if (expression is BinaryExpression) {
+    // Comparison (==/!=/</<=/>/>=) and logical (&&/||) operators use the
+    // same tokens in Go as in Dart. Recorded in `docs/mapping.md`.
+    final left = _writeExpression(expression.leftOperand, deps);
+    final right = _writeExpression(expression.rightOperand, deps);
+    return '$left ${expression.operator.lexeme} $right';
+  }
+  if (expression is PrefixExpression && expression.operator.lexeme == '!') {
+    return '!${_writeExpression(expression.operand, deps)}';
   }
   throw StateError('unchecked expression: ${expression.runtimeType}');
 }
