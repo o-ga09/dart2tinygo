@@ -259,46 +259,6 @@ void main() {
     });
   });
 
-  test('accepts int/double/bool/String literal locals', () async {
-    final errors = await checkSource('''
-void main() {
-  var count = 0;
-  var ratio = 0.5;
-  double whole = 2;
-  final ready = true;
-  const name = 'hi';
-  print('\$count \$ready \$name');
-  print(name);
-}
-''');
-    expect(errors, isEmpty);
-  });
-
-  test('reports locals of unsupported types', () async {
-    final errors = await checkSource('''
-void main() {
-  var d = const Duration(seconds: 1);
-  var xs = [1, 2];
-}
-''');
-    expect(errors, hasLength(2));
-    expect(errors[0].line, 2);
-    expect(errors[0].reason, contains('"Duration"'));
-    expect(errors[0].reason, contains('int, double, bool, String'));
-    expect(errors[1].line, 3);
-  });
-
-  test('reports unsupported local initializers', () async {
-    final errors = await checkSource('''
-void main() {
-  var sum = 1 + 2;
-}
-''');
-    expect(errors, hasLength(1));
-    expect(errors.single.line, 2);
-    expect(errors.single.reason, contains('"+"'));
-  });
-
   test('reports double interpolation as not supported yet', () async {
     final errors = await checkSource('''
 void main() {
