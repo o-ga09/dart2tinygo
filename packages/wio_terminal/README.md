@@ -22,6 +22,8 @@ Currently provided:
 | `Display.drawPixel/drawLine/drawRect/fillRect/drawCircle/fillCircle(..., color)` | `(*Display).DrawPixel/DrawLine/DrawRect/FillRect/DrawCircle/FillCircle(...)` | Shape drawing (via `tinygo.org/x/tinydraw`) |
 | `Display.drawTextColor(x, y, text, color)` / `.drawTextSize(x, y, text, color, size)` / `.textWidth(text, size)` | `(*Display).DrawTextColor(...)` / `.DrawTextSize(...)` / `.TextWidth(...)` | Colored text, other point sizes (9/12/18/24), and measuring rendered width |
 | `rgb(r, g, b)` | `wio.RGB(r, g, b)` | Build a [`Color`](./lib/wio_terminal.dart) from 8-bit components |
+| `newIrSender()` | `wio.NewIrSender()` | Configure the IR LED (`machine.WIO_IR`, TCC4 PWM carrier) for NEC transmit |
+| `IrSender.sendNec(address, command)` / `.sendRaw32(code)` | `(*IrSender).SendNEC(...)` / `.SendRaw32(...)` | Send a NEC infrared code |
 | `newLed()` | `wio.NewLed()` | Configure the user LED (blue, `machine.LED`) as an output |
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | Drive the user LED |
 | `newButtons()` | `wio.NewButtons()` | Configure buttons A/B/C and the 5-way switch as pull-up inputs |

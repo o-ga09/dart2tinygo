@@ -106,6 +106,26 @@ class Color {
 @GoName('wio.RGB')
 external Color rgb(int r, int g, int b);
 
+/// Configures the infrared emitter LED (`machine.WIO_IR`) for PWM output
+/// and returns a handle to send NEC codes with it.
+@GoName('wio.NewIrSender')
+external IrSender newIrSender();
+
+/// The Wio Terminal's infrared emitter LED. Obtain one with [newIrSender].
+@GoType('*wio.IrSender')
+class IrSender {
+  IrSender._();
+
+  /// Sends a standard 8-bit NEC frame for [address]/[command] (built from
+  /// address, ~address, command, ~command).
+  @GoName('SendNEC')
+  external void sendNec(int address, int command);
+
+  /// Sends [code] as a 32-bit NEC frame, as-is.
+  @GoName('SendRaw32')
+  external void sendRaw32(int code);
+}
+
 /// Configures the Wio Terminal's own user LED (blue) as an output and
 /// returns a handle to control it.
 @GoName('wio.NewLed')

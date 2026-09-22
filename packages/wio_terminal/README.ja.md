@@ -22,6 +22,8 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `Display.drawPixel/drawLine/drawRect/fillRect/drawCircle/fillCircle(..., color)` | `(*Display).DrawPixel/DrawLine/DrawRect/FillRect/DrawCircle/FillCircle(...)` | 図形描画（`tinygo.org/x/tinydraw` 経由） |
 | `Display.drawTextColor(x, y, text, color)` / `.drawTextSize(x, y, text, color, size)` / `.textWidth(text, size)` | `(*Display).DrawTextColor(...)` / `.DrawTextSize(...)` / `.TextWidth(...)` | 色付き文字、他のフォントサイズ（9/12/18/24）、描画幅の計測 |
 | `rgb(r, g, b)` | `wio.RGB(r, g, b)` | 8bit成分から[`Color`](./lib/wio_terminal.dart)を作る |
+| `newIrSender()` | `wio.NewIrSender()` | 赤外線LED（`machine.WIO_IR`、TCC4 PWMキャリア）をNEC送信用に設定 |
+| `IrSender.sendNec(address, command)` / `.sendRaw32(code)` | `(*IrSender).SendNEC(...)` / `.SendRaw32(...)` | NEC赤外線コードを送信 |
 | `newLed()` | `wio.NewLed()` | ユーザーLED（青、`machine.LED`）を出力として設定 |
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | ユーザーLEDを制御 |
 | `newButtons()` | `wio.NewButtons()` | ボタンA/B/Cと5方向スイッチをプルアップ入力として設定 |
