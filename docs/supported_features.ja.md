@@ -15,7 +15,7 @@
 | 型: `List<int>` | 実装済み（Go の `[]byte` に対応 — [`mapping.ja.md`](./mapping.ja.md) の「List<int>」参照。リテラル、添字の読み書き、`.length`、`.add()`。`int` 以外の要素型は未実装） |
 | `var`、型推論 | 実装済み（最小構成：`var x = <リテラルかバインディング呼び出し>;`） |
 | `final` / `const` ローカル変数 | 一部対応：キーワードは無視され、`var` と同じ初期化子なら `final`/`const` も受け付けて `x := ...` を出力する |
-| トップレベル関数、`main` | 実装済み（最小構成：引数なしの `void main()` 単体のみ、他のトップレベル関数は不可） |
+| トップレベル関数、`main` | 実装済み — 引数なしの `void main()` 単体に加え、位置引数・`int`/`double`/`bool`/`String`/`List<int>`/`@GoType`/`void` の型・ブロックまたは式（`=>`）本体・`return`・再帰・前方参照を伴う任意個数のトップレベル関数。名前付き／省略可能／デフォルト値付き引数は未実装（[`mapping.ja.md`](./mapping.ja.md) 参照） |
 | `while` | 実装済み（任意の `bool` 条件、例：`while (count < 10)`。ネスト可） |
 | `for`（C スタイル） | 実装済み（`for (var i = <初期値>; cond; updater)`。宣言する変数1つ・updater1つに限定（Go の post-clause が単一の文のため）。`for-in` は未実装） |
 | `break` / `continue` | 実装済み（ラベルなしのみ） |
@@ -26,7 +26,7 @@
 | `int` ⇄ `double` 変換：`.toDouble()` / `.toInt()` / `.round()` | 実装済み（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に） |
 | `if` / `else if` / `else` | 実装済み（各分岐はブロック。ループと `if` は自由にネスト可） |
 | 比較（`==`/`!=`/`<`/`<=`/`>`/`>=`）・論理（`&&`/`\|\|`/`!`）演算子 | 実装済み（`==`/`!=` は同じ型の `int`/`double`/`bool`/`String` 同士、`<`/`<=`/`>`/`>=` は同じ型の `int`/`int` か `double`/`double`、`&&`/`\|\|`/`!` は `bool`） |
-| `switch` | 未実装 |
+| `switch` | 実装済み（`int`/`String`/`bool` 式のみ。定数値の `case`、`default` に対応。連続する空の `case` は Go の `case a, b:` にまとめられる。`case ... when ...` ガードやデストラクチャリングパターンは未実装） |
 | `print` | 実装済み（任意の `String` 式、または文字列補間） |
 | 文字列補間 | `int` / `double` / `bool` / `String` の式が実装済み |
 | カスケード `..` | 実装済み。`@GoType` のバインディング値のみ対応（`newDisplay()..clear()..drawText(...)`）。各セクションは必ず素の `..method(args)` バインディング呼び出しでなければならず、文として、またはローカル変数の初期化子として使える |

@@ -24,30 +24,35 @@ class UnsupportedSyntaxError {
   String toString() => '$filePath:$line:$column: $reason';
 }
 
-/// v0.1 minimal scope only: a single `void main()` containing
-/// `int`/`double`/`bool`/`String` locals, `while (cond)`, a single-variable
-/// C-style `for`, `break`/`continue`, `if`/`else if`/`else`, comparison
-/// (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`/`!`), arithmetic
-/// (`+`/`-`/`*`/`~/`/`%`/`/`, `int`/`double` not mixed), compound assignment
-/// (`+=`/`-=`/`*=`/`/=`/`%=`/`~/=`), and `int`⇄`double` conversion
-/// (`.toDouble()`/`.toInt()`/`.round()`) operators, `print(...)`,
-/// `sleep(Duration(...))`, and calls into annotation bindings (`@GoImport` /
-/// `@GoName` / `@GoType`, see `docs/writing_bindings.md`). Everything else
-/// is reported here, up front, rather than discovered mid-conversion.
+/// v0.1 minimal scope only: a single `void main()` plus other top-level
+/// functions (positional parameters only, `return`), all containing
+/// `int`/`double`/`bool`/`String`/`List<int>` locals, `while (cond)`, a
+/// single-variable C-style `for`, `break`/`continue`, `if`/`else if`/
+/// `else`, comparison (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`/
+/// `!`), arithmetic (`+`/`-`/`*`/`~/`/`%`/`/`, `int`/`double`/`String` not
+/// mixed), compound assignment (`+=`/`-=`/`*=`/`/=`/`%=`/`~/=`), `int`⇄
+/// `double` conversion (`.toDouble()`/`.toInt()`/`.round()`), and `String`/
+/// `List<int>` operations, `print(...)`, `sleep(Duration(...))`, and calls
+/// into annotation bindings (`@GoImport` / `@GoName` / `@GoType`, see
+/// `docs/writing_bindings.md`). Everything else is reported here, up
+/// front, rather than discovered mid-conversion.
 List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
   final errors = <UnsupportedSyntaxError>[];
   final unit = result.unit;
 
   FunctionDeclaration? mainDecl;
+  final functions = <FunctionDeclaration>[];
   for (final declaration in unit.declarations) {
-    if (declaration is FunctionDeclaration &&
-        declaration.name.lexeme == 'main') {
-      if (mainDecl != null) {
-        errors.add(
-            _error(result, declaration.offset, 'duplicate main() declaration'));
-        continue;
+    if (declaration is FunctionDeclaration) {
+      functions.add(declaration);
+      if (declaration.name.lexeme == 'main') {
+        if (mainDecl != null) {
+          errors.add(_error(
+              result, declaration.offset, 'duplicate main() declaration'));
+        } else {
+          mainDecl = declaration;
+        }
       }
-      mainDecl = declaration;
       continue;
     }
     errors.add(
@@ -55,7 +60,8 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
         result,
         declaration.offset,
         'top-level "${_declarationLabel(declaration)}" is not supported yet; '
-        'v0.1 minimal scope only supports a single top-level void main()',
+        'v0.1 minimal scope only supports top-level functions and a single '
+        'void main()',
       ),
     );
   }
@@ -64,6 +70,27 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
     errors.add(_error(result, 0, 'no top-level void main() found'));
     return errors;
   }
+
+  // Checked in source order (not "main first"), so errors read top to
+  // bottom the way the file does; recursion and forward references between
+  // functions are fine either way, since neither the checker nor Go cares
+  // about declaration order.
+  for (final function in functions) {
+    if (identical(function, mainDecl)) {
+      errors.addAll(_checkMainDeclaration(result, function));
+    } else {
+      errors.addAll(_checkFunctionDeclaration(result, function));
+    }
+  }
+
+  return errors;
+}
+
+List<UnsupportedSyntaxError> _checkMainDeclaration(
+  ResolvedUnitResult result,
+  FunctionDeclaration mainDecl,
+) {
+  final errors = <UnsupportedSyntaxError>[];
 
   final params = mainDecl.functionExpression.parameters;
   if (params != null && params.parameters.isNotEmpty) {
@@ -85,6 +112,90 @@ List<UnsupportedSyntaxError> checkEntryPoint(ResolvedUnitResult result) {
 
   for (final statement in body.block.statements) {
     errors.addAll(_checkStatement(result, statement, insideLoop: false));
+  }
+
+  return errors;
+}
+
+/// A top-level function other than `main`: plain positional parameters
+/// (no named, optional, or default-valued parameters — Go has no
+/// equivalent), a supported (or `void`) return type, and a body that's
+/// either a block — checked the same way `main`'s is, plus `return` — or
+/// an expression (`=> ...`). Recorded in `docs/mapping.md`.
+List<UnsupportedSyntaxError> _checkFunctionDeclaration(
+  ResolvedUnitResult result,
+  FunctionDeclaration declaration,
+) {
+  final errors = <UnsupportedSyntaxError>[];
+  final name = declaration.name.lexeme;
+
+  final returnType = declaration.returnType?.type;
+  final isVoidReturn = returnType == null || returnType is VoidType;
+  if (!isVoidReturn && !_isSupportedType(returnType)) {
+    errors.add(
+      _error(
+        result,
+        declaration.returnType?.offset ?? declaration.offset,
+        'function "$name" has return type '
+        '"${returnType.getDisplayString()}", but only void or '
+        '$_supportedTypesLabel are supported',
+      ),
+    );
+  }
+
+  for (final parameter
+      in declaration.functionExpression.parameters?.parameters ??
+          const <FormalParameter>[]) {
+    if (parameter is! SimpleFormalParameter) {
+      errors.add(
+        _error(
+          result,
+          parameter.offset,
+          'function "$name" parameter "${parameter.name?.lexeme ?? '?'}" '
+          'must be a plain positional parameter in v0.1 minimal scope (no '
+          'named, optional, or default-valued parameters)',
+        ),
+      );
+      continue;
+    }
+    final paramType = parameter.declaredFragment?.element.type;
+    if (!_isSupportedType(paramType)) {
+      errors.add(
+        _error(
+          result,
+          parameter.offset,
+          'function "$name" parameter "${parameter.name?.lexeme ?? '?'}" '
+          'has type "${paramType?.getDisplayString() ?? '?'}", but only '
+          '$_supportedTypesLabel are supported',
+        ),
+      );
+    }
+  }
+
+  final body = declaration.functionExpression.body;
+  if (body is ExpressionFunctionBody) {
+    if (isVoidReturn) {
+      // `void f() => expr;` behaves like a single statement, not a value
+      // expression: the generator emits `expr` as its own statement, with
+      // no `return` (Go rejects `return <value>` in a function with no
+      // declared return type).
+      errors.addAll(_checkStatementExpression(result, body.expression));
+    } else {
+      errors.addAll(_checkExpression(result, body.expression));
+    }
+  } else if (body is BlockFunctionBody) {
+    for (final statement in body.block.statements) {
+      errors.addAll(_checkStatement(result, statement, insideLoop: false));
+    }
+  } else {
+    errors.add(
+      _error(
+        result,
+        body.offset,
+        'function "$name" must have a block body { ... } or an expression '
+        'body (=> ...)',
+      ),
+    );
   }
 
   return errors;
@@ -165,6 +276,21 @@ List<UnsupportedSyntaxError> _checkStatement(
       errors
           .addAll(_checkIfStatement(result, statement, insideLoop: insideLoop));
 
+    case SwitchStatement():
+      errors.addAll(
+          _checkSwitchStatement(result, statement, insideLoop: insideLoop));
+
+    case ReturnStatement():
+      // Whether a bare `return;` is required (void) or a value is required
+      // (non-void) is left to Dart's own analyzer, matching the project's
+      // existing "no casts" precedent of not re-deriving type compatibility
+      // dart2tinygo can already see was already enforced. Only the return
+      // value's own expression, if present, needs checking here.
+      final value = statement.expression;
+      if (value != null) {
+        errors.addAll(_checkExpression(result, value));
+      }
+
     default:
       errors.add(
         _error(
@@ -172,7 +298,7 @@ List<UnsupportedSyntaxError> _checkStatement(
           statement.offset,
           '"${_statementLabel(statement)}" is not supported in v0.1 minimal '
           'scope (only locals, while/for, break/continue, if/else if/else, '
-          'print(...), sleep(...), and binding calls)',
+          'return, print(...), sleep(...), and binding calls)',
         ),
       );
   }
@@ -394,8 +520,7 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
   }
 
   final target = expression.leftHandSide;
-  if (target is! SimpleIdentifier ||
-      expression.readElement is! LocalVariableElement) {
+  if (target is! SimpleIdentifier || expression.readElement is! LocalElement) {
     return [
       _error(result, target.offset, '"$op" target must be a local variable'),
     ];
@@ -510,12 +635,148 @@ List<UnsupportedSyntaxError> _checkIfStatement(
   return errors;
 }
 
+/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }`: v0.1
+/// minimal scope only covers a `switch` expression of type `int`/`String`/
+/// `bool` matched against constant-value cases (Go's `switch` has no pattern
+/// matching, guards, or destructuring — `docs/mapping.md`). Dart cases don't
+/// fall through, so neither does the generated Go, which is why no
+/// `insideSwitch` tracking is needed here: unlike C, a bare `break;` isn't
+/// required to end a case, so v0.1 doesn't special-case it inside `switch`
+/// (it's still only accepted where `insideLoop` already allows it).
+List<UnsupportedSyntaxError> _checkSwitchStatement(
+  ResolvedUnitResult result,
+  SwitchStatement statement, {
+  required bool insideLoop,
+}) {
+  final errors = <UnsupportedSyntaxError>[];
+
+  final scrutineeType = statement.expression.staticType;
+  final scrutineeSupported = scrutineeType != null &&
+      (scrutineeType.isDartCoreInt ||
+          scrutineeType.isDartCoreString ||
+          scrutineeType.isDartCoreBool);
+  if (!scrutineeSupported) {
+    errors.add(
+      _error(
+        result,
+        statement.expression.offset,
+        'switch expression has type '
+        '"${scrutineeType?.getDisplayString() ?? '?'}", but only '
+        'int/String/bool are supported in v0.1 minimal scope',
+      ),
+    );
+  } else {
+    errors.addAll(_checkExpression(result, statement.expression));
+  }
+
+  for (final member in statement.members) {
+    if (member.labels.isNotEmpty) {
+      errors.add(
+        _error(
+          result,
+          member.offset,
+          'labeled switch cases are not supported in v0.1 minimal scope',
+        ),
+      );
+    }
+
+    switch (member) {
+      case SwitchPatternCase():
+        final guardedPattern = member.guardedPattern;
+        if (guardedPattern.whenClause != null) {
+          errors.add(
+            _error(
+              result,
+              guardedPattern.whenClause!.offset,
+              '"case ... when ..." guards are not supported in v0.1 '
+              'minimal scope',
+            ),
+          );
+        } else {
+          final pattern = guardedPattern.pattern;
+          if (pattern is! ConstantPattern) {
+            errors.add(
+              _error(
+                result,
+                pattern.offset,
+                'case pattern "${_stripImpl(pattern)}" is not supported in '
+                'v0.1 minimal scope (only constant int/String/bool values)',
+              ),
+            );
+          } else if (scrutineeSupported) {
+            errors.addAll(
+                _checkCaseValue(result, pattern.expression, scrutineeType));
+          }
+        }
+      case SwitchDefault():
+        break;
+      case SwitchCase():
+        // The pre-Dart-3 non-pattern case form; the parser always produces
+        // SwitchPatternCase for `case <expr>:` today, but SwitchMember is a
+        // sealed class with this as a third variant.
+        errors.add(
+          _error(
+            result,
+            member.offset,
+            'case pattern "${_stripImpl(member)}" is not supported in v0.1 '
+            'minimal scope (only constant int/String/bool values)',
+          ),
+        );
+    }
+
+    for (final inner in member.statements) {
+      errors.addAll(_checkStatement(result, inner, insideLoop: insideLoop));
+    }
+  }
+
+  return errors;
+}
+
+/// A case value must be a literal matching the switch expression's type
+/// exactly — no implicit promotion, matching the "no implicit casts"
+/// precedent used throughout (`docs/mapping.md`).
+List<UnsupportedSyntaxError> _checkCaseValue(
+  ResolvedUnitResult result,
+  Expression expression,
+  DartType scrutineeType,
+) {
+  final matches = (scrutineeType.isDartCoreInt &&
+          expression is IntegerLiteral) ||
+      (scrutineeType.isDartCoreString && expression is SimpleStringLiteral) ||
+      (scrutineeType.isDartCoreBool && expression is BooleanLiteral);
+  if (!matches) {
+    return [
+      _error(
+        result,
+        expression.offset,
+        'case value "${_expressionLabel(expression)}" does not match the '
+        'switch expression\'s type '
+        '"${scrutineeType.getDisplayString()}"; v0.1 minimal scope only '
+        'supports constant int/String/bool literals',
+      ),
+    ];
+  }
+  return const [];
+}
+
 List<UnsupportedSyntaxError> _checkExpressionStatement(
   ResolvedUnitResult result,
   ExpressionStatement statement,
-) {
-  final expression = statement.expression;
+) =>
+    _checkStatementExpression(result, statement.expression);
 
+/// An [expression] used the way a statement uses one: its value, if any, is
+/// discarded, so only expressions the generator knows how to emit as a
+/// standalone Go statement are accepted — not any value expression (e.g. a
+/// bare `1 + 2;` is rejected here even though it's fine in value position).
+/// Shared by [_checkExpressionStatement] and, for a `void` function's
+/// expression body (`void f() => expr;`, which behaves like a single
+/// statement — see `_checkFunctionDeclaration`), that body's expression
+/// directly.
+List<UnsupportedSyntaxError> _checkStatementExpression(
+  ResolvedUnitResult result,
+  Expression expression,
+) {
   if (expression is CascadeExpression) {
     return _checkCascadeExpression(result, expression);
   }
@@ -559,10 +820,11 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
     if (listAdd != null) return listAdd;
     if (_checkNumConversion(result, expression) != null ||
         _checkStringMethod(result, expression) != null ||
+        _isLocalFunctionCall(expression) ||
         _bindingOf(expression) != null ||
         _describeBindingProblem(expression) != null) {
-      // A conversion, String method, or binding call as a statement; a
-      // non-void result is discarded.
+      // A conversion, String method, local function call, or binding call
+      // as a statement; a non-void result is discarded.
       return _checkExpression(result, expression);
     }
   }
@@ -576,6 +838,16 @@ List<UnsupportedSyntaxError> _checkExpressionStatement(
       'sleep(...), and binding calls)',
     ),
   ];
+}
+
+/// A call to a top-level Dart function declared in this same file, not an
+/// `external` binding — see `docs/mapping.md`, "Top-level functions". Maps
+/// 1:1 onto a Go call of the same name.
+bool _isLocalFunctionCall(MethodInvocation call) {
+  final callee = call.methodName.element;
+  return call.target == null &&
+      callee is TopLevelFunctionElement &&
+      !callee.isExternal;
 }
 
 /// The `@GoName` binding behind [call], or `null` if [call] is not a
@@ -598,13 +870,14 @@ GoBinding? _bindingOf(MethodInvocation call) {
   return goBindingOf(callee);
 }
 
-/// A binding method's receiver: a local variable, or (method chaining, see
-/// #30) another binding call's result — both must hold a `@GoType` value,
-/// since that's the only Dart type a binding method can be called on.
+/// A binding method's receiver: a local variable or parameter, or (method
+/// chaining, see #30) another binding call's result — all must hold a
+/// `@GoType` value, since that's the only Dart type a binding method can be
+/// called on.
 bool _isValidBindingReceiver(Expression target) {
   if (!isGoType(target.staticType)) return false;
   if (target is SimpleIdentifier) {
-    return target.element is LocalVariableElement;
+    return target.element is LocalElement;
   }
   if (target is MethodInvocation) return _bindingOf(target) != null;
   return false;
@@ -693,7 +966,7 @@ List<UnsupportedSyntaxError> _checkExpression(
     return const [];
   }
   if (expression is Identifier) {
-    if (expression.element is LocalVariableElement) return const [];
+    if (expression.element is LocalElement) return const [];
     final builtinGetter = _checkBuiltinGetter(result, expression);
     if (builtinGetter != null) return builtinGetter;
     if (_constantBindingOf(expression) != null) return const [];
@@ -711,7 +984,7 @@ List<UnsupportedSyntaxError> _checkExpression(
     if (conversion != null) return conversion;
     final stringMethod = _checkStringMethod(result, expression);
     if (stringMethod != null) return stringMethod;
-    if (_bindingOf(expression) != null) {
+    if (_isLocalFunctionCall(expression) || _bindingOf(expression) != null) {
       return _checkBoundCall(result, expression);
     }
     final bindingProblem = _describeBindingProblem(expression);
@@ -1195,7 +1468,7 @@ List<UnsupportedSyntaxError> _checkIndexExpression(
 ) {
   final target = expression.target;
   if (target is! SimpleIdentifier ||
-      target.element is! LocalVariableElement ||
+      target.element is! LocalElement ||
       !_isListOfInt(target.staticType)) {
     return [
       _error(
@@ -1259,7 +1532,7 @@ List<UnsupportedSyntaxError>? _checkListAdd(
   if (call.methodName.name != 'add') return null;
   final target = call.target;
   if (target is! SimpleIdentifier ||
-      target.element is! LocalVariableElement ||
+      target.element is! LocalElement ||
       !_isListOfInt(target.staticType)) {
     return null;
   }

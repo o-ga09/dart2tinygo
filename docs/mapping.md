@@ -13,6 +13,8 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 | Dart | Go |
 | --- | --- |
 | `void main() { ... }` | `func main() { ... }` |
+| `T name(<params>) { ... }` / `T name(<params>) => expr;` | `func name(<params>) T { ... }` — see "Top-level functions" below |
+| `return expr;` / `return;` | `return expr` / `return` |
 | `var x = <int literal>;` | `x := <int literal>` |
 | `while (true) { ... }` | `for { ... }` (a general `while (cond)` becomes `for cond { ... }`) |
 | `for (var i = <init>; cond; updater) { ... }` | `for i := <init>; cond; updater { ... }` — direct; exactly one declared loop variable, one condition, one updater (Go's post-clause is a single statement) |
@@ -40,6 +42,49 @@ task 2. Implemented in `packages/dart2tinygo/lib/src/backend/generator.dart`.
 
 Go imports (`strconv`, `time`) are only emitted when the generated code
 actually uses them.
+
+## Top-level functions (decided 2026-09-22, implemented)
+
+Any number of top-level functions besides `main` map 1:1 onto Go `func`s in
+the same generated file, in source order (purely for a readable diff — Go
+doesn't care about declaration order, so forward references and recursion
+both work without restriction).
+
+- **Parameters are positional only.** Named parameters
+  (`{required int x}`), optional positional parameters (`[int x = 0]`), and
+  any default value are rejected — Go has no equivalent, and a struct-based
+  mapping for named parameters may come later.
+- **Parameter and return types**: `int`/`double`/`bool`/`String`/
+  `List<int>`/`@GoType`, or `void` for the return type. The same "no casts"
+  rule applies as everywhere else, so calling a function doesn't itself
+  cast arguments — a call's own argument expressions are checked exactly
+  like any other value expression.
+- **A `@GoType` parameter or return type registers that binding's Go
+  import**, even if the function's body never calls a method on it — unlike
+  a local, whose import only gets registered when a binding call is
+  actually written, a type that appears **only** in a signature would
+  otherwise never trigger that registration.
+- **`return expr;` / bare `return;`** inside a block body. Whether a bare
+  `return;` (void) or a value (non-void) is required, and that the value's
+  type matches the declared return type, is left to Dart's own analyzer —
+  the same "trust Dart's own type-checking" precedent used elsewhere
+  (e.g. `docs/mapping.md` doesn't re-verify `int += double` is invalid,
+  since Dart already rejects it).
+- **An expression body (`=> expr;`)** works for both non-void functions
+  (becomes `return expr`) and `void` ones (`void f() => print(s);` is
+  idiomatic Dart; since Go rejects `return <value>` in a function with no
+  declared return type, this becomes `expr` as its own statement, checked
+  the same way an `ExpressionStatement` is — so only expressions the
+  generator can emit as a statement are accepted there, not any value
+  expression).
+- **Calling a function declared in this file** (not an `external` binding)
+  maps to a plain Go call of the same name — as a statement (discarding a
+  non-void result, like a binding call) or as a value expression.
+- Closures, function values, and function-typed parameters are out of
+  scope — a `FunctionDeclaration` is the only function shape recognized;
+  anything that tries to use a function as a value (assign it to a
+  variable, pass it as an argument) is rejected as an unsupported
+  expression, since no code path treats a bare function reference as one.
 
 ## Annotation bindings (decided, implemented)
 
@@ -137,6 +182,31 @@ the same class of BMP/astral caveat every other option here also has.
 | `a.substring(start)` / `a.substring(start, end)` | `a[start:]` / `a[start:end]` |
 | `a.codeUnits` | `[]byte(a)` (see "List<int>" above) |
 
+## Switch statements (decided 2026-09-22, implemented)
+
+`switch` maps onto Go's own `switch`, which shares Dart 3's no-fallthrough
+semantics: neither language falls through into the next case by default, so
+the generator needs no `break` to terminate a case (a bare `break;` inside a
+`switch` case is not specially handled in v0.1 — it goes through the same
+"only inside a while/for loop" check as everywhere else, since none of the
+motivating use cases need it yet).
+
+Restricted to constant-value cases on an `int`/`String`/`bool` scrutinee —
+Go's `switch` has no pattern matching, so a Dart 3 pattern other than a bare
+constant (`case var x:`, destructuring, object patterns) is rejected by the
+checker, as is a `case ... when ...` guard and a labeled case.
+
+| Dart | Go |
+| --- | --- |
+| `switch (x) { case 0: ...; case 1: ...; default: ...; }` | `switch x { case 0: ...; case 1: ...; default: ...; }` — direct |
+| `case a: case b: <body>` (consecutive empty cases) | `case a, b: <body>` — Dart's case-grouping syntax isn't a statement, so adjacent empty cases are merged into one Go `case` clause with a comma-separated value list |
+| `case a: /* nothing, falls into default */ default: <body>` | `default: <body>` (the `a` case is dropped, not merged) — Go's `default` has no value list, but it already matches any value no explicit `case` claims, which is exactly what an empty case falling into `default` means |
+| `case 'x':` / `case true:` | `case "x":` / `case true:` — the case value must be a literal of the scrutinee's own type, no implicit conversion |
+
+Out of scope for v0.1: `case ... when ...` guards, non-constant/destructuring
+patterns, `for-in`/`for-loop`-in-`switch` label targets, and enum-value
+cases (blocked on `enum` support, see the type mapping table).
+
 ## Cascades (decided 2026-09-22, implemented)
 
 `a..b()..c()` isn't a single Go expression — Go has nothing that reads a
@@ -165,10 +235,11 @@ getter/setter/index section meaningful).
 | `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.2) |
 | `enum` | `type E int` + `const ( ... iota )`; `.index` is the value, `.name` via a string table | decided (v0.2) |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) | decided (v0.2) |
-| top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker | decided |
+| top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker — see "Top-level functions" above | impl. |
 | `if` / `else if` / `else` | direct; every branch must be a block (see the v0.1 table above) | impl. |
 | `while` (general condition) / `for` (one declared variable, one updater) / `break` / `continue` | direct; see the v0.1 table above | impl. |
-| `for-in` / `switch` | `for-in` → `range`; Dart `switch` does not fall through, so neither does the output | decided |
+| `for-in` | → `range` | decided (v0.2) |
+| `switch` | `switch`; constant `int`/`String`/`bool` cases only, no fallthrough, empty cases merge/drop — see "Switch statements" above | impl. |
 | cascade `a..b()..c()` on a `@GoType` binding value | temporary (or the local's own name, as an initializer) + statement sequence — see "Cascades" above | impl. |
 | method chaining `a().b()` on a binding call result | direct — see "Annotation bindings" above | impl. |
 | `@GoType` class | the annotated Go type expression, verbatim | impl. |

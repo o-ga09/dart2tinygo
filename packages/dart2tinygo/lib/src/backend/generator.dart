@@ -52,19 +52,19 @@ class GoDeps {
   int nextTempId = 0;
 }
 
-/// Converts the `main()` function of a checked [ResolvedUnitResult] into a
-/// single-file Go program.
+/// Converts every top-level function of a checked [ResolvedUnitResult]
+/// (`main()` plus any others — see `docs/mapping.md`, "Top-level
+/// functions") into a single-file Go program, in source order (Go doesn't
+/// care about declaration order, so this is purely for a readable diff
+/// against the Dart source).
 Future<GeneratedGoFile> generateGoFile(ResolvedUnitResult result) async {
-  final mainDecl = result.unit.declarations
-      .whereType<FunctionDeclaration>()
-      .firstWhere((d) => d.name.lexeme == 'main');
-  final body = (mainDecl.functionExpression.body as BlockFunctionBody).block;
+  final functions = result.unit.declarations.whereType<FunctionDeclaration>();
 
   final deps = GoDeps(dartrtModule: await _resolveDartrtModule());
   final imports = deps.imports;
-  final bodyBuffer = StringBuffer();
-  for (final statement in body.statements) {
-    _writeStatement(statement, bodyBuffer, deps, indent: '\t');
+  final funcsBuffer = StringBuffer();
+  for (final function in functions) {
+    _writeFunctionDeclaration(function, funcsBuffer, deps);
   }
 
   final out = StringBuffer()
@@ -89,15 +89,74 @@ Future<GeneratedGoFile> generateGoFile(ResolvedUnitResult result) async {
     }
     out.writeln();
   }
-  out
-    ..writeln('func main() {')
-    ..write(bodyBuffer)
-    ..writeln('}');
+  out.write(funcsBuffer);
 
   return GeneratedGoFile(
     out.toString(),
     localModules: deps.localModules.values.toList(),
   );
+}
+
+/// `T name(...) { ... }` (or `T name(...) => expr;`) maps 1:1 onto Go's
+/// `func name(...) T { ... }` — including `main()`, which is simply the
+/// case with no parameters and a `void` return. Parameters are always
+/// simple positional ones by the time the checker has accepted this
+/// declaration (`_checkFunctionDeclaration`).
+void _writeFunctionDeclaration(
+  FunctionDeclaration declaration,
+  StringBuffer out,
+  GoDeps deps,
+) {
+  final parameters = declaration.functionExpression.parameters?.parameters ??
+      const <FormalParameter>[];
+  final paramGo = parameters
+      .cast<SimpleFormalParameter>()
+      .map((p) =>
+          '${p.name!.lexeme} ${_goTypeName(p.declaredFragment!.element.type, deps)}')
+      .join(', ');
+
+  final returnType = declaration.returnType?.type;
+  final isVoidReturn = returnType == null || returnType is VoidType;
+  final returnGo = isVoidReturn ? '' : ' ${_goTypeName(returnType, deps)}';
+
+  out.writeln('func ${declaration.name.lexeme}($paramGo)$returnGo {');
+  final body = declaration.functionExpression.body;
+  if (body is BlockFunctionBody) {
+    for (final statement in body.block.statements) {
+      _writeStatement(statement, out, deps, indent: '\t');
+    }
+  } else if (body is ExpressionFunctionBody) {
+    if (isVoidReturn) {
+      // `void f() => expr;`: `expr` on its own, no `return` (Go rejects
+      // `return <value>` in a function with no declared return type).
+      _writeExpressionStatement(body.expression, out, deps, indent: '\t');
+    } else {
+      out.writeln('\treturn ${_writeExpression(body.expression, deps)}');
+    }
+  }
+  out.writeln('}');
+  out.writeln();
+}
+
+/// The Go type expression for a Dart type the checker has already confirmed
+/// is supported (`_isSupportedType`) — used for parameter and return types,
+/// which (unlike locals) Go's syntax requires spelling out explicitly. A
+/// `@GoType` here also registers its binding's import, since a type used
+/// only in a signature (never itself the target of a method call) would
+/// otherwise never trigger that registration. Recorded in `docs/mapping.md`.
+String _goTypeName(DartType type, GoDeps deps) {
+  if (type.isDartCoreInt) return 'int';
+  if (type.isDartCoreDouble) return 'float64';
+  if (type.isDartCoreBool) return 'bool';
+  if (type.isDartCoreString) return 'string';
+  if (_isListOfInt(type)) return '[]byte';
+  if (isGoType(type)) {
+    final element = (type as InterfaceType).element;
+    final import = goImportOf(element.library);
+    if (import != null) _useImport(import, deps);
+    return goTypeOf(element)!;
+  }
+  throw StateError('unchecked Go type: ${type.getDisplayString()}');
 }
 
 void _writeStatement(
@@ -152,6 +211,15 @@ void _writeStatement(
 
     case IfStatement():
       _writeIfStatement(statement, out, deps, indent: indent);
+
+    case SwitchStatement():
+      _writeSwitchStatement(statement, out, deps, indent: indent);
+
+    case ReturnStatement():
+      final value = statement.expression;
+      out.writeln(value == null
+          ? '${indent}return'
+          : '${indent}return ${_writeExpression(value, deps)}');
 
     default:
       throw StateError(
@@ -227,6 +295,55 @@ void _writeForStatement(
   out.writeln('$indent}');
 }
 
+/// `switch (mode) { case 0: ... case 1: case 2: ... default: ... }` maps
+/// onto Go's own `switch`, which shares Dart's no-fallthrough semantics
+/// (`docs/mapping.md`). Consecutive empty Dart cases (`case 1: case 2: ...`)
+/// are grouping syntax, not statements — they're merged into a single Go
+/// `case 1, 2:` clause. An empty case immediately before `default` is
+/// dropped rather than merged: Go's `default` has no value list to merge
+/// into, but it already matches any value no other `case` claims, which is
+/// exactly what an empty case falling into `default` means.
+void _writeSwitchStatement(
+  SwitchStatement statement,
+  StringBuffer out,
+  GoDeps deps, {
+  required String indent,
+}) {
+  out.writeln(
+      '${indent}switch ${_writeExpression(statement.expression, deps)} {');
+
+  final pendingValues = <String>[];
+  for (final member in statement.members) {
+    switch (member) {
+      case SwitchPatternCase():
+        final pattern = member.guardedPattern.pattern as ConstantPattern;
+        pendingValues.add(_writeExpression(pattern.expression, deps));
+        if (member.statements.isEmpty) continue;
+        out.writeln('${indent}case ${pendingValues.join(', ')}:');
+        pendingValues.clear();
+        for (final inner in member.statements) {
+          _writeStatement(inner, out, deps, indent: '$indent\t');
+        }
+      case SwitchDefault():
+        pendingValues.clear();
+        out.writeln('${indent}default:');
+        for (final inner in member.statements) {
+          _writeStatement(inner, out, deps, indent: '$indent\t');
+        }
+      case SwitchCase():
+        throw StateError(
+          'generator received unchecked SwitchCase member. This is a bug: '
+          'checkEntryPoint() should have rejected it first.',
+        );
+    }
+  }
+  if (pendingValues.isNotEmpty) {
+    out.writeln('${indent}case ${pendingValues.join(', ')}:');
+  }
+
+  out.writeln('$indent}');
+}
+
 void _writeExpressionStatement(
   Expression expression,
   StringBuffer out,
@@ -273,6 +390,11 @@ void _writeExpressionStatement(
     final listAdd = _writeListAdd(expression, deps);
     if (listAdd != null) {
       out.writeln('$indent$listAdd');
+      return;
+    }
+    final localCall = _writeLocalFunctionCall(expression, deps);
+    if (localCall != null) {
+      out.writeln('$indent$localCall');
       return;
     }
     final bound = _writeBoundCall(expression, deps);
@@ -445,6 +567,8 @@ String _writeExpression(Expression expression, GoDeps deps) {
     if (conversion != null) return conversion;
     final substring = _writeSubstring(expression, deps);
     if (substring != null) return substring;
+    final localCall = _writeLocalFunctionCall(expression, deps);
+    if (localCall != null) return localCall;
     final bound = _writeBoundCall(expression, deps);
     if (bound != null) return bound;
   }
@@ -589,6 +713,23 @@ bool _isListOfInt(DartType? type) {
   if (type is! InterfaceType || !type.isDartCoreList) return false;
   final args = type.typeArguments;
   return args.length == 1 && args.single.isDartCoreInt;
+}
+
+/// A call to a top-level Dart function declared in this same file (not an
+/// `external` binding — see checker.dart's `_isLocalFunctionCall`) maps 1:1
+/// onto a Go call of the same name, since it's declared right alongside
+/// `main()` in the same generated file. `docs/mapping.md`.
+String? _writeLocalFunctionCall(MethodInvocation call, GoDeps deps) {
+  final callee = call.methodName.element;
+  if (call.target != null ||
+      callee is! TopLevelFunctionElement ||
+      callee.isExternal) {
+    return null;
+  }
+  final args = call.argumentList.arguments
+      .map((arg) => _writeExpression(arg, deps))
+      .join(', ');
+  return '${call.methodName.name}($args)';
 }
 
 /// `@GoName` calls map 1:1 onto Go calls: a top-level binding becomes
