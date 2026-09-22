@@ -19,6 +19,8 @@ Currently provided:
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | Drive the user LED |
 | `newButtons()` | `wio.NewButtons()` | Configure buttons A/B/C and the 5-way switch as pull-up inputs |
 | `Buttons.isPressed(button)` / `.waitPressed(button)` | `(*Buttons).IsPressed(button)` / `.WaitPressed(button)` | Poll or block (debounced) on a [`Button`](./lib/wio_terminal.dart) |
+| `newBuzzer()` | `wio.NewBuzzer()` | Configure the buzzer (`machine.WIO_BUZZER`, TCC0 PWM) for tone output |
+| `Buzzer.tone(freqHz)` / `.stop()` / `.beep(freqHz, durationMs)` | `(*Buzzer).Tone(freqHz)` / `.Stop()` / `.Beep(freqHz, durationMs)` | Sound (or silence) the buzzer |
 
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 

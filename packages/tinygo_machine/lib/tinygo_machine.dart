@@ -74,6 +74,12 @@ external ADC newAdc(Pin pin);
 class PWM {
   PWM._();
 
+  /// Reconfigures the frequency. The period is shared by every channel on
+  /// the underlying peripheral, so this affects every other [PWM] sharing
+  /// it; fine for a single-channel use (e.g. a buzzer).
+  @GoName('SetFrequency')
+  external void setFrequency(int freqHz);
+
   /// Sets the duty cycle as a percentage (0-100); out-of-range values are
   /// clamped.
   @GoName('SetDuty')

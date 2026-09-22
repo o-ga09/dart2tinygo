@@ -89,3 +89,26 @@ class Buttons {
   @GoName('WaitPressed')
   external void waitPressed(Button button);
 }
+
+/// Configures the built-in buzzer (`machine.WIO_BUZZER`) for PWM output and
+/// returns a handle to control it.
+@GoName('wio.NewBuzzer')
+external Buzzer newBuzzer();
+
+/// The Wio Terminal's built-in buzzer. Obtain one with [newBuzzer].
+@GoType('*wio.Buzzer')
+class Buzzer {
+  Buzzer._();
+
+  /// Starts (or retunes) a continuous tone at [freqHz], until [stop].
+  @GoName('Tone')
+  external void tone(int freqHz);
+
+  /// Silences the buzzer.
+  @GoName('Stop')
+  external void stop();
+
+  /// Sounds [freqHz] for [durationMs] milliseconds, then stops.
+  @GoName('Beep')
+  external void beep(int freqHz, int durationMs);
+}

@@ -47,6 +47,19 @@ func NewPWM(p Pin, freqHz int) *PWM {
 	panic("tgm: no PWM peripheral available for this pin")
 }
 
+// SetFrequency reconfigures the PWM period. Note that a period is shared by
+// every channel on the underlying peripheral (see machine.TCC's own docs),
+// so this affects every other PWM on the same peripheral too; fine for a
+// single-channel use like a buzzer, but callers sharing a peripheral across
+// multiple Pins should account for it.
+func (p *PWM) SetFrequency(freqHz int) {
+	var period uint64
+	if freqHz > 0 {
+		period = uint64(1e9) / uint64(freqHz)
+	}
+	p.periph.Configure(machine.PWMConfig{Period: period})
+}
+
 // SetDuty sets the duty cycle as a percentage (0-100); values outside that
 // range are clamped.
 func (p *PWM) SetDuty(percent int) {

@@ -19,6 +19,8 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `Led.on()` / `.off()` / `.toggle()` | `(*Led).On()` / `.Off()` / `.Toggle()` | ユーザーLEDを制御 |
 | `newButtons()` | `wio.NewButtons()` | ボタンA/B/Cと5方向スイッチをプルアップ入力として設定 |
 | `Buttons.isPressed(button)` / `.waitPressed(button)` | `(*Buttons).IsPressed(button)` / `.WaitPressed(button)` | [`Button`](./lib/wio_terminal.dart) をポーリング、またはデバウンス付きでブロック待機 |
+| `newBuzzer()` | `wio.NewBuzzer()` | ブザー（`machine.WIO_BUZZER`、TCC0 PWM）をトーン出力として設定 |
+| `Buzzer.tone(freqHz)` / `.stop()` / `.beep(freqHz, durationMs)` | `(*Buzzer).Tone(freqHz)` / `.Stop()` / `.Beep(freqHz, durationMs)` | ブザーを鳴らす・止める |
 
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 
