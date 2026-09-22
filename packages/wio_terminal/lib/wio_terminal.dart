@@ -112,3 +112,43 @@ class Buzzer {
   @GoName('Beep')
   external void beep(int freqHz, int durationMs);
 }
+
+/// Configures the built-in ambient light sensor (`machine.WIO_LIGHT`) as an
+/// analog input and returns a handle to read it.
+@GoName('wio.NewLightSensor')
+external LightSensor newLightSensor();
+
+/// The Wio Terminal's built-in ambient light sensor. Obtain one with
+/// [newLightSensor].
+@GoType('*wio.LightSensor')
+class LightSensor {
+  LightSensor._();
+
+  /// The raw sample (0-65535).
+  @GoName('Read')
+  external int read();
+
+  /// The raw sample normalized to 0-100.
+  @GoName('ReadPercent')
+  external int readPercent();
+}
+
+/// Configures the built-in microphone (`machine.WIO_MIC`) as an analog
+/// input and returns a handle to read it.
+@GoName('wio.NewMicrophone')
+external Microphone newMicrophone();
+
+/// The Wio Terminal's built-in microphone. Obtain one with [newMicrophone].
+@GoType('*wio.Microphone')
+class Microphone {
+  Microphone._();
+
+  /// An instantaneous raw sample (0-65535).
+  @GoName('Read')
+  external int read();
+
+  /// Samples continuously for [windowMs] milliseconds and returns the
+  /// peak-to-peak amplitude (0-65535), a simple loudness estimate.
+  @GoName('ReadLevel')
+  external int readLevel(int windowMs);
+}

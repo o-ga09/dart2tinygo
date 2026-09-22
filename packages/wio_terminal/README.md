@@ -21,6 +21,10 @@ Currently provided:
 | `Buttons.isPressed(button)` / `.waitPressed(button)` | `(*Buttons).IsPressed(button)` / `.WaitPressed(button)` | Poll or block (debounced) on a [`Button`](./lib/wio_terminal.dart) |
 | `newBuzzer()` | `wio.NewBuzzer()` | Configure the buzzer (`machine.WIO_BUZZER`, TCC0 PWM) for tone output |
 | `Buzzer.tone(freqHz)` / `.stop()` / `.beep(freqHz, durationMs)` | `(*Buzzer).Tone(freqHz)` / `.Stop()` / `.Beep(freqHz, durationMs)` | Sound (or silence) the buzzer |
+| `newLightSensor()` | `wio.NewLightSensor()` | Configure the light sensor (`machine.WIO_LIGHT`) as an analog input |
+| `LightSensor.read()` / `.readPercent()` | `(*LightSensor).Read()` / `.ReadPercent()` | Raw (0-65535) or normalized (0-100) brightness |
+| `newMicrophone()` | `wio.NewMicrophone()` | Configure the microphone (`machine.WIO_MIC`) as an analog input |
+| `Microphone.read()` / `.readLevel(windowMs)` | `(*Microphone).Read()` / `.ReadLevel(windowMs)` | Instantaneous sample, or peak-to-peak amplitude over a sampling window |
 
 See `examples/hello_wioterminal` for usage and [docs/writing_bindings.md](../../docs/writing_bindings.md) for how the annotations work.
 

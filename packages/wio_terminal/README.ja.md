@@ -21,6 +21,10 @@ Dart 側（`lib/wio_terminal.dart`）は注釈のみで、実体は `go/` 配下
 | `Buttons.isPressed(button)` / `.waitPressed(button)` | `(*Buttons).IsPressed(button)` / `.WaitPressed(button)` | [`Button`](./lib/wio_terminal.dart) をポーリング、またはデバウンス付きでブロック待機 |
 | `newBuzzer()` | `wio.NewBuzzer()` | ブザー（`machine.WIO_BUZZER`、TCC0 PWM）をトーン出力として設定 |
 | `Buzzer.tone(freqHz)` / `.stop()` / `.beep(freqHz, durationMs)` | `(*Buzzer).Tone(freqHz)` / `.Stop()` / `.Beep(freqHz, durationMs)` | ブザーを鳴らす・止める |
+| `newLightSensor()` | `wio.NewLightSensor()` | 照度センサー（`machine.WIO_LIGHT`）をアナログ入力として設定 |
+| `LightSensor.read()` / `.readPercent()` | `(*LightSensor).Read()` / `.ReadPercent()` | 生値（0〜65535）または正規化値（0〜100）の明るさ |
+| `newMicrophone()` | `wio.NewMicrophone()` | マイク（`machine.WIO_MIC`）をアナログ入力として設定 |
+| `Microphone.read()` / `.readLevel(windowMs)` | `(*Microphone).Read()` / `.ReadLevel(windowMs)` | 瞬時サンプル、またはサンプリング窓での振幅（peak-to-peak） |
 
 使い方は `examples/hello_wioterminal`、注釈の仕組みは [docs/writing_bindings.ja.md](../../docs/writing_bindings.ja.md) を参照。
 
