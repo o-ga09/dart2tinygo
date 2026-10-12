@@ -44,12 +44,14 @@ class WiFi {
   external void disconnect();
 
   /// Fetches [url] and returns the response body as text, or `''` on
-  /// failure.
+  /// failure. Gives up after 15 seconds and returns `''` (timeout not yet
+  /// verified on real hardware; see #65).
   @GoName('HttpGet')
   external String httpGet(String url);
 
   /// Posts [body] to [url] with [contentType] and returns the response
-  /// body as text, or `''` on failure.
+  /// body as text, or `''` on failure or after the same 15 second timeout
+  /// as [httpGet].
   @GoName('HttpPost')
   external String httpPost(String url, String contentType, String body);
 }
