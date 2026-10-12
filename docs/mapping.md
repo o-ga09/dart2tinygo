@@ -326,7 +326,7 @@ body statement instead, or a method), and operator overloading.
 | Dart | Go | Status |
 | --- | --- | --- |
 | `int` | `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
-| `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
+| `double` | `float64`; `double d = 2;` → `d := 2.0` so Go doesn't infer `int` | impl. (literals/locals/binding results; `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation inside `print()`) |
 | `bool` | `bool` | impl. (literals/locals/binding results; comparison/logical operators; `if`) |
 | `String` | `string`; `.length` → `len(s)` (byte length — see "List<int>" below for the rationale); `+` concatenation; `.substring`; no general indexing in v0.0.1 | impl. (literals/locals/binding results, `+`, `.substring()`, `.length`, `.codeUnits`) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
@@ -360,7 +360,9 @@ implemented); `FormatDouble` (Dart prints `1.0`, Go's
 interpolation). This is language semantics, not board knowledge, so it does
 not violate the core's no-board-code rule.
 
-## String interpolation (implemented for `int` / `double` / `bool` / `String`)
+## String interpolation (implemented for `int` / `double` / `bool` / `String`, `print()` only)
+
+- Scope: the checker accepts a `StringInterpolation` only as the sole argument of `print()`. Elsewhere use `List<int>` + `String.fromCharCodes()` (see [`supported_features.md`](./supported_features.md#formatting-a-number-into-a-general-string)).
 
 - Do not use `fmt.Sprintf`. Concatenate with `strconv` etc. based on type, to avoid bloating the TinyGo binary.
 - `int` → `strconv.Itoa`, `bool` → `strconv.FormatBool`, `String` → verbatim, `double` → `dartrt.FormatDouble`. The interpolated expression may be any supported value expression (literal, local, binding call, arithmetic, `.toDouble()`/`.toInt()`/`.round()`, Go constant), not only a local. `print(s)` likewise takes any `String` expression.
