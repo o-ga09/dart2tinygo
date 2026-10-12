@@ -355,6 +355,8 @@ String _goTypeName(DartType type, GoDeps deps) {
   if (type.isDartCoreBool) return 'bool';
   if (type.isDartCoreString) return 'string';
   if (_isListOfInt(type)) return '[]byte';
+  final listElement = _listElementType(type);
+  if (listElement != null) return '[]${_goTypeName(listElement, deps)}';
   if (isGoType(type)) {
     final element = (type as InterfaceType).element;
     final import = goImportOf(element.library);
@@ -643,7 +645,8 @@ void _writeListIndexWrite(
   final target = (index.target as SimpleIdentifier).name;
   final indexValue = _writeExpression(index.index, deps);
   final rhs = _writeExpression(expression.rightHandSide, deps);
-  out.writeln('$indent$target[$indexValue] = byte($rhs)');
+  final byteList = _isListOfInt((index.target as SimpleIdentifier).staticType);
+  out.writeln('$indent$target[$indexValue] = ${byteList ? 'byte($rhs)' : rhs}');
 }
 
 /// `data.add(v);`: `List.add` mutates in place and returns `void` in Dart;
@@ -658,11 +661,13 @@ void _writeListIndexWrite(
 String? _writeListAdd(MethodInvocation call, GoDeps deps) {
   if (call.methodName.name != 'add') return null;
   final target = call.target;
-  if (target is! SimpleIdentifier || !_isListOfInt(target.staticType)) {
+  if (target is! SimpleIdentifier ||
+      _listElementType(target.staticType) == null) {
     return null;
   }
   final value = _writeExpression(call.argumentList.arguments.single, deps);
-  return '${target.name} = append(${target.name}, byte($value))';
+  final element = _isListOfInt(target.staticType) ? 'byte($value)' : value;
+  return '${target.name} = append(${target.name}, $element)';
 }
 
 /// A for-loop updater or a compound-assignment statement: `x++`/`x--` map
@@ -838,16 +843,22 @@ String _writeExpression(Expression expression, GoDeps deps) {
     if (classConstruction != null) return classConstruction;
   }
   if (expression is ListLiteral) {
+    final byteList = _isListOfInt(expression.staticType);
     final elements = expression.elements
         .cast<Expression>()
-        .map((element) => 'byte(${_writeExpression(element, deps)})')
+        .map((element) => byteList
+            ? 'byte(${_writeExpression(element, deps)})'
+            : _writeExpression(element, deps))
         .join(', ');
-    return '[]byte{$elements}';
+    final goType = _goTypeName(expression.staticType!, deps);
+    return '$goType{$elements}';
   }
   if (expression is IndexExpression) {
     final target = _writeExpression(expression.target!, deps);
     final index = _writeExpression(expression.index, deps);
-    return 'int($target[$index])';
+    return _isListOfInt(expression.target!.staticType)
+        ? 'int($target[$index])'
+        : '$target[$index]';
   }
   if (expression is ParenthesizedExpression) {
     return '(${_writeExpression(expression.expression, deps)})';
@@ -1018,6 +1029,15 @@ bool _isListOfInt(DartType? type) {
   if (type is! InterfaceType || !type.isDartCoreList) return false;
   final args = type.typeArguments;
   return args.length == 1 && args.single.isDartCoreInt;
+}
+
+/// The element type of a supported non-`List<int>`-specific `List<T>`, as in
+/// checker.dart's `_listElementType`; the checker has already rejected
+/// anything else.
+DartType? _listElementType(DartType? type) {
+  if (type is! InterfaceType || !type.isDartCoreList) return null;
+  final args = type.typeArguments;
+  return args.length == 1 ? args.single : null;
 }
 
 /// A call to a top-level Dart function declared in this same file (not an

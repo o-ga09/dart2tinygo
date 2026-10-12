@@ -732,6 +732,74 @@ void main() {
     });
   });
 
+  group('List<T> (non-int element)', () {
+    test('accepts double/bool/String lists with literal, index, add, length',
+        () async {
+      final errors = await checkSource('''
+void main() {
+  var a = <double>[1.5];
+  a.add(2.5);
+  a[0] = 3.5;
+  var x = a[0];
+  var b = [true, false];
+  b[1] = true;
+  var c = <String>[];
+  c.add('s');
+  print('\${a.length} \${b.length} \${c.length} \$x');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts List<String> parameter and return types', () async {
+      final errors = await checkSource('''
+List<String> withName(List<String> names, String n) => names;
+
+void main() {
+  var names = <String>['a'];
+  var r = withName(names, 'b');
+  print('\${r.length}');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('rejects adding an int to a List<double>', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = <double>[1.5];
+  var i = 2;
+  a.add(i);
+  print('\${a.length}');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('add(...) argument must be double'));
+    });
+
+    test('rejects index-writing a String into a List<double>', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = <double>[1.5];
+  a[0] = 'x';
+  print('\${a.length}');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('requires a double value'));
+    });
+
+    test('rejects a nested list', () async {
+      final errors = await checkSource('''
+void main() {
+  var a = <List<String>>[];
+  print('\${a.length}');
+}
+''');
+      expect(errors, isNotEmpty);
+    });
+  });
+
   group('List<int>', () {
     test('accepts a List<int> local with an explicit type argument', () async {
       final errors = await checkSource('''
@@ -808,16 +876,6 @@ void main() {
 }
 ''');
       expect(errors, isEmpty);
-    });
-
-    test('reports a list literal of non-int elements', () async {
-      final errors = await checkSource('''
-void main() {
-  var data = <double>[1.0, 2.0];
-}
-''');
-      expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('List<int>'));
     });
 
     test('reports index read/write on a non-local receiver', () async {

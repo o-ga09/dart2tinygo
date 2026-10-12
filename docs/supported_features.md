@@ -12,7 +12,7 @@ Any PR that adds a language feature must update this table.
 | Types: `double` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation inside `print()`) |
 | Types: `bool` | Partial: locals, literals, binding results/arguments, comparison/logical operators |
 | Types: `String` | Implemented (locals, literals, binding results/arguments, comparison, `+` concatenation, `.length`, `.codeUnits`, `.substring()`, `String.fromCharCodes()`) |
-| Types: `List<int>` | Implemented (maps to Go `[]byte` — see [`mapping.md`](./mapping.md#listint-decided-2026-09-22-implemented); literals, index read/write, `.length`, `.add()`; other element types not implemented) |
+| Types: `List<int>` | Implemented (maps to Go `[]byte` — see [`mapping.md`](./mapping.md#listint-decided-2026-09-22-implemented); literals, index read/write, `.length`, `.add()`; other element types: see the next row) |
 | `var`, type inference | Implemented (minimal: `var x = <literal or binding call>;`) |
 | `final` / `const` locals | Partial: the keyword is ignored, so `final`/`const` are accepted on the same initializers as `var` and emitted as `x := ...` |
 | Top-level functions, `main` | Implemented — a single parameterless `void main()`, plus any number of other top-level functions with positional parameters, `int`/`double`/`bool`/`String`/`List<int>`/`@GoType`/`void` types, block or expression (`=>`) bodies, `return`, recursion, and forward references. Named/optional/default-valued parameters not implemented (see [`mapping.md`](./mapping.md)) |
@@ -50,7 +50,7 @@ See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 
 | Feature | Status |
 | --- | --- |
-| `List<T>` → Go slice | Not implemented |
+| Types: `List<T>` (`T` = `double`/`bool`/`String`/enum/`@GoType`/user class) | Implemented (maps to Go `[]T`, no casts — see [`mapping.md`](./mapping.md#listt-for-other-element-types-50-implemented); literals, index read/write, `.length`, `.add()`; nested lists, `List.filled`, and spreads not implemented) |
 | Bitwise operations, `int.toSigned(n)` | Not implemented |
 
 ## Formatting a number into a general `String`

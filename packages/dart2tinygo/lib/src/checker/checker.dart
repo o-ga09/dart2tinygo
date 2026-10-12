@@ -1789,7 +1789,13 @@ List<UnsupportedSyntaxError> _checkFieldWrite(
 /// identity (matched by declaring element, like [_sameComparableType]).
 bool _fieldAssignable(DartType target, DartType rhs) {
   if (_sameComparableType(target, rhs)) return true;
-  if (_isListOfInt(target) && _isListOfInt(rhs)) return true;
+  final targetElement = _listElementType(target);
+  final rhsElement = _listElementType(rhs);
+  if (targetElement != null &&
+      rhsElement != null &&
+      _fieldAssignable(targetElement, rhsElement)) {
+    return true;
+  }
   if (target is InterfaceType &&
       rhs is InterfaceType &&
       (isGoType(target) || _isUserClassType(target)) &&
@@ -1808,13 +1814,13 @@ bool _isSupportedType(DartType? type) =>
         type.isDartCoreDouble ||
         type.isDartCoreBool ||
         type.isDartCoreString ||
-        _isListOfInt(type) ||
+        _listElementType(type) != null ||
         isGoType(type) ||
         _isEnumType(type) ||
         _isUserClassType(type));
 
 const _supportedTypesLabel =
-    'int, double, bool, String, List<int>, enum, @GoType binding, and '
+    'int, double, bool, String, List<T>, enum, @GoType binding, and '
     'user class';
 
 /// A user enum or a `@GoType` binding enum (#31) — see
@@ -1823,13 +1829,31 @@ bool _isEnumType(DartType? type) =>
     type is InterfaceType && type.element is EnumElement;
 
 /// `List<int>` maps to Go `[]byte` — see the `List<int>` section of
-/// `docs/mapping.md`. No other element type is supported —
-/// `List<double>`/`List<String>`/etc. stay out of v0.0.2 minimal scope.
+/// `docs/mapping.md`.
 bool _isListOfInt(DartType? type) {
   if (type is! InterfaceType || !type.isDartCoreList) return false;
   final args = type.typeArguments;
   return args.length == 1 && args.single.isDartCoreInt;
 }
+
+/// The element type of a supported `List<T>` (`List<int>` → `int`, mapped to
+/// `[]byte`; any other element type that is itself a supported non-list
+/// type maps to `[]T` — see the `List<T>` section of `docs/mapping.md`), or
+/// `null` for any other type (including nested lists).
+DartType? _listElementType(DartType? type) {
+  if (type is! InterfaceType || !type.isDartCoreList) return null;
+  final args = type.typeArguments;
+  if (args.length != 1) return null;
+  final element = args.single;
+  if (element is InterfaceType && element.isDartCoreList) return null;
+  return _isSupportedType(element) ? element : null;
+}
+
+/// Whether a value of type [actual] may be stored into a `List` whose
+/// element type is [element] — no implicit conversion, so the types must
+/// match exactly (an `int` is not accepted for a `List<double>`).
+bool _listElementAssignable(DartType element, DartType? actual) =>
+    actual != null && _fieldAssignable(element, actual);
 
 /// Checks [expression] in value position (a local's initializer, a binding
 /// argument, an interpolated value): it must be something the generator can
@@ -2299,7 +2323,9 @@ List<UnsupportedSyntaxError>? _checkBuiltinGetter(
   if (name != 'length' && name != 'codeUnits') return null;
   final isString = targetType?.isDartCoreString ?? false;
   if (name == 'codeUnits' && !isString) return null;
-  if (name == 'length' && !isString && !_isListOfInt(targetType)) return null;
+  if (name == 'length' && !isString && _listElementType(targetType) == null) {
+    return null;
+  }
 
   return _checkExpression(result, target);
 }
@@ -2410,14 +2436,15 @@ List<UnsupportedSyntaxError> _checkListLiteral(
   ResolvedUnitResult result,
   ListLiteral literal,
 ) {
-  if (!_isListOfInt(literal.staticType)) {
+  if (_listElementType(literal.staticType) == null) {
     return [
       _error(
         result,
         literal.offset,
         'list literal has type '
         '"${literal.staticType?.getDisplayString() ?? '?'}", but only '
-        'List<int> is supported in v0.0.2 minimal scope',
+        'List<T> of int, double, bool, String, enum, @GoType binding, or '
+        'user class is supported',
       ),
     ];
   }
@@ -2452,12 +2479,13 @@ List<UnsupportedSyntaxError> _checkIndexExpression(
   final target = expression.target;
   if (target is! SimpleIdentifier ||
       target.element is! LocalElement ||
-      !_isListOfInt(target.staticType)) {
+      _listElementType(target.staticType) == null) {
     return [
       _error(
         result,
         expression.offset,
-        'indexing "[...]" must be on a local variable holding a List<int>',
+        'indexing "[...]" must be on a local variable holding a supported '
+        'List<T>',
       ),
     ];
   }
@@ -2476,7 +2504,7 @@ List<UnsupportedSyntaxError> _checkListIndexWrite(
       _error(
         result,
         expression.offset,
-        '"${expression.operator.lexeme}" is not supported on List<int> '
+        '"${expression.operator.lexeme}" is not supported on List '
         'indexing in v0.0.2 minimal scope (only plain "=")',
       ),
     ];
@@ -2489,12 +2517,15 @@ List<UnsupportedSyntaxError> _checkListIndexWrite(
   final rhsErrors = _checkExpression(result, rhs);
   if (rhsErrors.isNotEmpty) return rhsErrors;
   final rhsType = rhs.staticType;
-  if (rhsType == null || !rhsType.isDartCoreInt) {
+  final element = _listElementType(
+      (expression.leftHandSide as IndexExpression).target?.staticType)!;
+  if (!_listElementAssignable(element, rhsType)) {
     return [
       _error(
         result,
         rhs.offset,
-        'List<int> index assignment requires an int value, got '
+        'List index assignment requires a ${element.getDisplayString()} '
+        'value, got '
         '"${rhsType?.getDisplayString() ?? '?'}"',
       ),
     ];
@@ -2516,7 +2547,7 @@ List<UnsupportedSyntaxError>? _checkListAdd(
   final target = call.target;
   if (target is! SimpleIdentifier ||
       target.element is! LocalElement ||
-      !_isListOfInt(target.staticType)) {
+      _listElementType(target.staticType) == null) {
     return null;
   }
   final args = call.argumentList.arguments;
@@ -2533,12 +2564,13 @@ List<UnsupportedSyntaxError>? _checkListAdd(
   final argErrors = _checkExpression(result, arg);
   if (argErrors.isNotEmpty) return argErrors;
   final argType = arg.staticType;
-  if (argType == null || !argType.isDartCoreInt) {
+  final element = _listElementType(target.staticType)!;
+  if (!_listElementAssignable(element, argType)) {
     return [
       _error(
         result,
         arg.offset,
-        'add(...) argument must be int, got '
+        'add(...) argument must be ${element.getDisplayString()}, got '
         '"${argType?.getDisplayString() ?? '?'}"',
       ),
     ];

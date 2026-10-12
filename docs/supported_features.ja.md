@@ -12,7 +12,7 @@
 | 型: `double` | 実装済み（ローカル変数、リテラル、バインディングの戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、`print()` 内の文字列補間） |
 | 型: `bool` | 一部対応：ローカル変数、リテラル、バインディングの戻り値・引数、比較・論理演算子 |
 | 型: `String` | 実装済み（ローカル変数、リテラル、バインディングの戻り値・引数、比較、`+` 連結、`.length`、`.codeUnits`、`.substring()`、`String.fromCharCodes()`） |
-| 型: `List<int>` | 実装済み（Go の `[]byte` に対応 — [`mapping.ja.md`](./mapping.ja.md) の「List<int>」参照。リテラル、添字の読み書き、`.length`、`.add()`。`int` 以外の要素型は未実装） |
+| 型: `List<int>` | 実装済み（Go の `[]byte` に対応 — [`mapping.ja.md`](./mapping.ja.md) の「List<int>」参照。リテラル、添字の読み書き、`.length`、`.add()`。`int` 以外の要素型は次の行） |
 | `var`、型推論 | 実装済み（最小構成：`var x = <リテラルかバインディング呼び出し>;`） |
 | `final` / `const` ローカル変数 | 一部対応：キーワードは無視され、`var` と同じ初期化子なら `final`/`const` も受け付けて `x := ...` を出力する |
 | トップレベル関数、`main` | 実装済み — 引数なしの `void main()` 単体に加え、位置引数・`int`/`double`/`bool`/`String`/`List<int>`/`@GoType`/`void` の型・ブロックまたは式（`=>`）本体・`return`・再帰・前方参照を伴う任意個数のトップレベル関数。名前付き／省略可能／デフォルト値付き引数は未実装（[`mapping.ja.md`](./mapping.ja.md) 参照） |
@@ -49,7 +49,7 @@
 
 | 機能 | 状態 |
 | --- | --- |
-| `List<T>` → Go スライス | 未実装 |
+| 型: `List<T>`（`T` = `double`/`bool`/`String`/enum/`@GoType`/ユーザークラス） | 実装済み（Go の `[]T` に対応、キャストなし — [`mapping.ja.md`](./mapping.ja.md#int-以外の要素型の-listt50実装済み) 参照。リテラル、添字の読み書き、`.length`、`.add()`。ネストしたリスト、`List.filled`、スプレッドは未実装） |
 | ビット演算、`int.toSigned(n)` | 未実装 |
 
 ## 一般の `String` への数値の整形
