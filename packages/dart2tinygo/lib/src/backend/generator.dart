@@ -865,8 +865,8 @@ String _writeExpression(Expression expression, GoDeps deps) {
   }
   if (expression is BinaryExpression) {
     final op = expression.operator.lexeme;
-    final left = _writeExpression(expression.leftOperand, deps);
-    final right = _writeExpression(expression.rightOperand, deps);
+    final left = _writeBinaryOperand(expression.leftOperand, op, deps);
+    final right = _writeBinaryOperand(expression.rightOperand, op, deps);
     // Comparison (==/!=/</<=/>/>=), logical (&&/||), and int + - * use the
     // same tokens in Go as in Dart. `~/` (truncating division) is Go's `/`;
     // `%` goes through `dartrt.Mod` because Dart's `%` is never negative,
@@ -878,10 +878,31 @@ String _writeExpression(Expression expression, GoDeps deps) {
   if (expression is PrefixExpression && expression.operator.lexeme == '!') {
     return '!${_writeExpression(expression.operand, deps)}';
   }
+  if (expression is PrefixExpression && expression.operator.lexeme == '~') {
+    // Go's bitwise complement is the unary `^`.
+    return '^${_writeExpression(expression.operand, deps)}';
+  }
   if (expression is PrefixExpression && expression.operator.lexeme == '-') {
     return '-${_writeExpression(expression.operand, deps)}';
   }
   throw StateError('unchecked expression: ${expression.runtimeType}');
+}
+
+const _goBitwiseOperators = {'&', '|', '^', '<<', '>>'};
+
+/// Dart and Go rank the bitwise operators differently against arithmetic
+/// (Dart: `+` binds tighter than `&`/`|`/`^`; Go: `&`/`<<`/`>>` bind like
+/// `*`, `|`/`^` like `+`), so an unparenthesized binary operand next to a
+/// bitwise operator — on either side — is parenthesized to keep Dart's
+/// grouping (#51, `docs/mapping.md`). Other operator pairs share precedence.
+String _writeBinaryOperand(Expression operand, String parentOp, GoDeps deps) {
+  final text = _writeExpression(operand, deps);
+  if (operand is BinaryExpression &&
+      (_goBitwiseOperators.contains(parentOp) ||
+          _goBitwiseOperators.contains(operand.operator.lexeme))) {
+    return '($text)';
+  }
+  return text;
 }
 
 /// A `@GoName` on an `external` top-level or static getter names a Go
@@ -941,6 +962,9 @@ String? _writeNumConversion(MethodInvocation call, GoDeps deps) {
   switch (call.methodName.name) {
     case 'toDouble' when targetType.isDartCoreInt:
       return 'float64($value)';
+    case 'toSigned' when targetType.isDartCoreInt:
+      final width = _writeExpression(call.argumentList.arguments.single, deps);
+      return '${_useDartrt(deps)}.ToSigned($value, $width)';
     case 'toInt' when targetType.isDartCoreDouble:
       return 'int($value)';
     case 'round' when targetType.isDartCoreDouble:

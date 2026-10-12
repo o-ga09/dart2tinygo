@@ -248,13 +248,104 @@ void main() {
     test('reports unsupported binary operators', () async {
       final errors = await checkSource('''
 void main() {
-  var sum = 1 & 2;
+  var sum = 1 >>> 2;
   if (sum > 0) { print('hi'); }
 }
 ''');
       expect(errors, hasLength(1));
       expect(errors.single.line, 2);
-      expect(errors.single.reason, contains('"&"'));
+      expect(errors.single.reason, contains('">>>"'));
+    });
+  });
+
+  group('bitwise operations', () {
+    test('accepts & | ^ << >> ~ and compound forms on ints', () async {
+      final errors = await checkSource('''
+void main() {
+  var flags = 0x0F;
+  var a = flags & 0x03;
+  var b = flags | 0x80;
+  var c = flags ^ a;
+  var d = flags << 2;
+  var e = flags >> 1;
+  var f = ~flags;
+  flags &= 0x0E;
+  flags |= 1;
+  flags ^= 2;
+  flags <<= 1;
+  flags >>= 1;
+  print('\$a \$b \$c \$d \$e \$f \$flags');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('accepts int.toSigned(n)', () async {
+      final errors = await checkSource('''
+void main() {
+  var raw = 0xFF;
+  var s = (raw | 0x80).toSigned(8);
+  print('\$s');
+}
+''');
+      expect(errors, isEmpty);
+    });
+
+    test('reports bitwise operators on double operands', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  var y = x & 1;
+}
+''');
+      expect(errors, isNotEmpty);
+    });
+
+    test('reports ~ on a non-int operand', () async {
+      final errors = await checkBindingSource('''
+import 'package:test_binding/test_binding.dart';
+
+void main() {
+  final widget = newWidget();
+  var s = 'hi';
+  widget.fill(~s);
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('"~"'));
+    });
+
+    test('reports bitwise compound assignment on a double local', () async {
+      final errors = await checkSource('''
+void main() {
+  var x = 1.5;
+  x <<= 1;
+}
+''');
+      expect(errors, hasLength(1));
+    });
+
+    test('reports toSigned with a non-literal width', () async {
+      final errors = await checkSource('''
+void main() {
+  var n = 8;
+  var s = 5.toSigned(n);
+  print('\$s');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('toSigned'));
+    });
+
+    test('reports toSigned width outside 1..64', () async {
+      final errors = await checkSource('''
+void main() {
+  var s = 5.toSigned(65);
+  print('\$s');
+}
+''');
+      expect(errors, hasLength(1));
+      expect(errors.single.reason, contains('toSigned'));
     });
   });
 
@@ -1280,11 +1371,11 @@ void main() {
       final errors = await checkSource('''
 void main() {
   var i = 0;
-  i &= 2;
+  i >>>= 2;
 }
 ''');
       expect(errors, hasLength(1));
-      expect(errors.single.reason, contains('"&="'));
+      expect(errors.single.reason, contains('">>>="'));
     });
   });
 
@@ -1533,14 +1624,14 @@ import 'package:test_binding/test_binding.dart';
 void main() {
   final widget = newWidget();
   widget.show(1, 2, 'a' - 'b');
-  beep(1 & 2);
+  beep(1 >>> 2);
 }
 ''');
       expect(errors, hasLength(2));
       expect(errors[0].line, 5);
       expect(errors[0].reason, contains('"-"'));
       expect(errors[1].line, 6);
-      expect(errors[1].reason, contains('"&"'));
+      expect(errors[1].reason, contains('">>>"'));
     });
 
     test('accepts int arithmetic as a binding-call argument', () async {
