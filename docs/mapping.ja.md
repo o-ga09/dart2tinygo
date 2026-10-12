@@ -302,7 +302,7 @@ initializer list（`: field = expr, ...`）も使わない（Dart は宣言時
 | Dart | Go | 状態 |
 | --- | --- | --- |
 | `int` | `int` | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`~/`/`%`、単項 `-`、複合代入、`.toDouble()`） |
-| `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、文字列補間） |
+| `double` | `float64`。`double d = 2;` → `d := 2.0`（Go が `int` と推論しないように） | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`/`-`/`*`/`/`、単項 `-`、複合代入、`.toInt()`/`.round()`、`print()` 内の文字列補間） |
 | `bool` | `bool` | 実装済（リテラル／ローカル変数／バインディング戻り値、比較・論理演算子、`if`） |
 | `String` | `string`。`.length` → `len(s)`（バイト長。理由は下の「List<int>」を参照）。`+` 連結、`.substring`。v0.0.1 では一般の添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`、`.substring()`、`.length`、`.codeUnits`） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
@@ -332,7 +332,9 @@ Go の式一つで表せない意味論は、`packages/dart2tinygo/go/` の小�
 `strconv.FormatFloat` は `1`。実装済みで、文字列補間にも組み込み済み）。
 これは言語意味論でありボード知識ではないので、本体にボード固有コードを入れない原則には反しない。
 
-## 文字列補間（`int` / `double` / `bool` / `String` すべて実装済み）
+## 文字列補間（`int` / `double` / `bool` / `String` すべて実装済み。ただし `print()` 内のみ）
+
+- 適用範囲：checker は `StringInterpolation` を `print()` の唯一の引数としてのみ受け付ける。それ以外では `List<int>` + `String.fromCharCodes()` を使う（[`supported_features.ja.md`](./supported_features.ja.md#一般の-string-への数値の整形) 参照）。
 
 - `fmt.Sprintf` は使わない。型に応じて `strconv` 等で連結する（TinyGo のバイナリ肥大化を防ぐため）。
 - `int` → `strconv.Itoa`、`bool` → `strconv.FormatBool`、`String` → そのまま、`double` → `dartrt.FormatDouble`。補間式はローカル変数に限らず、対応している値の式（リテラル、ローカル変数、バインディング呼び出し、算術式、`.toDouble()`/`.toInt()`/`.round()`、Go 定数）なら何でもよい。`print(s)` も同様に任意の `String` 式を受け付ける。

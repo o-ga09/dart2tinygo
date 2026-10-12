@@ -9,7 +9,7 @@ Any PR that adds a language feature must update this table.
 | Feature | Status |
 | --- | --- |
 | Types: `int` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`~/`/`%`, unary `-`, compound assignment, `.toDouble()`) |
-| Types: `double` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation) |
+| Types: `double` | Implemented (locals, literals, binding results, `+`/`-`/`*`/`/`, unary `-`, compound assignment, `.toInt()`/`.round()`, string interpolation inside `print()`) |
 | Types: `bool` | Partial: locals, literals, binding results/arguments, comparison/logical operators |
 | Types: `String` | Implemented (locals, literals, binding results/arguments, comparison, `+` concatenation, `.length`, `.codeUnits`, `.substring()`, `String.fromCharCodes()`) |
 | Types: `List<int>` | Implemented (maps to Go `[]byte` — see [`mapping.md`](./mapping.md#listint-decided-2026-09-22-implemented); literals, index read/write, `.length`, `.add()`; other element types not implemented) |
@@ -28,12 +28,12 @@ Any PR that adds a language feature must update this table.
 | Comparison (`==`/`!=`/`<`/`<=`/`>`/`>=`) and logical (`&&`/`\|\|`/`!`) operators | Implemented (`==`/`!=` on matching `int`/`double`/`bool`/`String`; `<`/`<=`/`>`/`>=` on matching `int`/`int` or `double`/`double`; `&&`/`\|\|`/`!` on `bool`) |
 | `switch` | Implemented (`int`/`String`/`bool`/user-`enum` expressions only; constant-value cases, `default`; consecutive empty cases group into Go's `case a, b:`; guards (`case ... when ...`) and destructuring patterns not implemented) |
 | `print` | Implemented (any `String` expression, or a string interpolation) |
-| String interpolation | Implemented for `int` / `double` / `bool` / `String` expressions |
+| String interpolation | Implemented **only as the sole argument of `print()`** (`print('x=${x}')`) for `int` / `double` / `bool` / `String` expressions. Anywhere else (a local's initializer, a binding-call argument, ...) it is rejected — see [Formatting a number into a general `String`](#formatting-a-number-into-a-general-string) for the workaround |
 | `Duration` and `sleep` | Implemented (`dart:io` `sleep()`, `Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`) |
 | Bindings via annotations | Implemented (`@GoImport` / `@GoName` / `@GoType`; calls to external top-level functions, a `@GoType` class's own `external`/`@GoName`'d constructor (`Pin(3)`), and to methods on a `@GoType` receiver — a local, or (chaining, any depth) another binding call's/constructor's result — returning `int`/`double`/`bool`/`String`/`@GoType`, arguments of those types, and Go constants via `external` getters — see [`writing_bindings.md`](./writing_bindings.md)) |
 | Cascade `..` | Implemented, on a `@GoType` binding value only (`newDisplay()..clear()..drawText(...)`); every section must be a bare `..method(args)` binding call, as a statement or a local's initializer |
 | `enum` | Implemented — a plain user enum (`enum Mode { off, on }`: `.index`, `.name`, `==`/`!=`, `switch`) and a `@GoType`/`@GoName` binding enum (each constant maps onto an existing Go identifier, like a `static external` getter constant); no type parameters, `with`/`implements`, extra fields/methods, or constructor arguments on a constant |
-| Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation |
+| Common Go runtime (`dartrt`) | Implemented (`packages/dart2tinygo/go/`, imported only when used); `Mod` is wired into `%`/`%=`, `FormatDouble` into `double` string interpolation in `print()` |
 | `tinygo_machine`: LED, GPIO in/out, ADC, PWM, sleep | Implemented — GPIO (`Pin.led`, `Pin(n)`, `configure(PinMode.output\|input)`, `high()`/`low()`/`toggle()`/`get()`), ADC (`newAdc(pin)`, `.read()`), and PWM (`newPwm(pin, freqHz)`, `.setFrequency(freqHz)`, `.setDuty(percent)`); board-agnostic, verified with `tinygo build` for `wioterminal`, `pico`, and (PWM only) `itsybitsy-m4` — see [`writing_bindings.md`](./writing_bindings.md#decided-not-yet-implemented-2026-09-22) |
 | `wio_terminal`: LCD text/shapes/colors, user LED, buttons/switch, buzzer, light/mic ADC, accelerometer, IR transmit, USB serial | Implemented — `newDisplay()`/`.clear()`/`.drawText()` plus `.width()`/`.height()`/`.fillScreen()`/`.setBacklight()`/`.setRotation()`/`.drawPixel\|Line\|Rect\|Circle()`/`.fillRect\|Circle()`/`.drawTextColor\|Size()`/`.textWidth()` and `rgb(r,g,b)` → `Color`, `newLed()`/`.on()`/`.off()`/`.toggle()` (`machine.LED`, blue), `newButtons()`/`.isPressed(button)`/`.waitPressed(button)` (buttons A/B/C + 5-way switch, pull-up inputs), `newBuzzer()`/`.tone(freqHz)`/`.stop()`/`.beep(freqHz, durationMs)` (`machine.WIO_BUZZER`, TCC0 PWM), `newLightSensor()`/`newMicrophone()` (`machine.WIO_LIGHT`/`WIO_MIC` ADC), `newAccelerometer()`/`.update()`/`.x()`.../`.xMilliG()`... (LIS3DHTR over I2C1), `newIrSender()`/`.sendNec()`/`.sendRaw32()` (NEC transmit, TCC4 PWM carrier on `machine.WIO_IR`), and `serialAvailable()`/`serialReadLine()` (USB CDC serial input); verified with `tinygo build -target=wioterminal` (`examples/button_led`, and all bindings together in `examples/wioterminal_demo`, #24). See [`writing_bindings.md`](./writing_bindings.md#reference-bindings-in-this-repository) |
 | `wio_terminal/hid`: USB HID keyboard/mouse | Implemented — a separate library (`import 'package:wio_terminal/hid.dart';`) and Go sub-package (`go/hid`, `machine/usb/hid/keyboard`+`.../mouse`) so a program that doesn't use HID doesn't enable that USB descriptor (which can affect CDC/auto-reset behaviour); `newKeyboard()`/`.write()`/`.press()`, `newMouse()`/`.move()`/`.click()`. Device-mode only. Verified with `tinygo build -target=wioterminal`, end to end through `dart2tinygo build`. See [`writing_bindings.md`](./writing_bindings.md#splitting-a-heavy-dependency-into-its-own-go-sub-package-decided-2026-09-22) |
@@ -52,6 +52,38 @@ See [`docs/mapping.md`](./mapping.md) for the exact Dart → Go rules, and
 | --- | --- |
 | `List<T>` → Go slice | Not implemented |
 | Bitwise operations, `int.toSigned(n)` | Not implemented |
+
+## Formatting a number into a general `String`
+
+String interpolation is only accepted inside `print()`, so there is no interpolation-based way to turn an `int` / `double` into a `String` for a local, a binding-call argument (e.g. `display.drawText(...)`, an HTTP body), or a `return` value. In v0.0.2 build the string from a `List<int>` of character codes with `String.fromCharCodes()` (and join pieces with `+`):
+
+```dart
+String intToString(int n) { // n >= 0
+  if (n == 0) {
+    return '0';
+  }
+  var digits = <int>[];
+  var rest = n;
+  while (rest > 0) {
+    digits.add(48 + rest % 10); // 48 == '0'
+    rest ~/= 10;
+  }
+  var out = <int>[];
+  var i = digits.length - 1;
+  while (i >= 0) {
+    out.add(digits[i]);
+    i -= 1;
+  }
+  return String.fromCharCodes(out);
+}
+
+void main() {
+  var body = 'x=' + intToString(42); // usable anywhere a String is
+  print(body);
+}
+```
+
+Notes: this handles non-negative `int` only (handle a sign yourself, e.g. prepend character code `45` for `-`); a `double` has to be split into integer and fractional parts by hand. The generated Go is `string([]byte)` plus `+`, with no `fmt`/`strconv`. A general interpolation expression or a number-formatting helper is not implemented.
 
 ## Future (depending on demand)
 
