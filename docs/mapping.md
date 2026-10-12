@@ -26,7 +26,11 @@ Scope: a single top-level `void main()` with `int` locals, `while (true)`,
 | `a % b` | `dartrt.Mod(a, b)` — Dart's `%` is never negative (`-5 % 3 == 1`); Go's `%` keeps the dividend's sign (`-5 % 3 == -2`), so a plain `%` would be wrong for negative operands; `int` only |
 | `a / b` | `a / b`; `double` only — Dart's `/` always returns `double`, even for two `int`s, which the generator can't reproduce without a cast; convert an `int` with `.toDouble()` first |
 | `-a` (unary) | `-a`; `int` or `double` |
-| `x ~/= y` | `x /= y`; `int` only |
+| `a & b` / `a \| b` / `a ^ b` / `a << b` / `a >> b` | same tokens in Go; `int` only (#51). Dart binds `+`/`-` tighter than `&`/`\|`/`^`, while in Go `&`/`<<`/`>>` bind like `*` and `\|`/`^` like `+`, so a binary-expression operand next to a bitwise operator is parenthesized (`a \| b ^ 1` → `a \| (b ^ 1)`). `>>>` is rejected |
+| `~a` | `^a` — Go's bitwise complement is unary `^`; `int` only |
+| `x &= y` / `\|=` / `^=` / `<<=` / `>>=` | same tokens in Go; `int` only |
+| `x.toSigned(n)` (`x`: `int`, `n`: int literal 1–64) | `dartrt.ToSigned(x, n)` — keeps the low `n` bits and sign-extends them (`0xFF.toSigned(8) == -1`) |
+| `x ~/= y` | `x /= y`; `int` only
 | `x %= y` | `x = dartrt.Mod(x, y)` — same reasoning as `%`; also valid as a `for`-loop updater; `int` only |
 | `x /= y` | `x /= y`; `x` (and `y`) must be `double` — same reasoning as `/`. `i /= 2;` for an `int` `i` isn't valid Dart to begin with (`i`'s inferred type would be `double`), not merely unsupported syntax; use `~/=` for truncating `int` division |
 | `x.toDouble()` (`x`: `int`) | `float64(x)` |
@@ -377,7 +381,7 @@ small board-agnostic Go module at `packages/dart2tinygo/go/` (module
 since it isn't declared by any `@GoImport` — nothing in the entry point's
 package graph otherwise points back at the transpiler's own package. It is
 imported only when used. Contents: `Mod` (Dart `%`, used by `%` and `%=`,
-implemented); `FormatDouble` (Dart prints `1.0`, Go's
+implemented); `ToSigned` (Dart `int.toSigned(n)`, implemented); `FormatDouble` (Dart prints `1.0`, Go's
 `strconv.FormatFloat` prints `1`; implemented, wired into string
 interpolation). This is language semantics, not board knowledge, so it does
 not violate the core's no-board-code rule.

@@ -34,3 +34,23 @@ func TestFormatDouble(t *testing.T) {
 		}
 	}
 }
+
+func TestToSigned(t *testing.T) {
+	cases := []struct{ v, width, want int }{
+		{0xFF, 8, -1},
+		{0x7F, 8, 127},
+		{0x80, 8, -128},
+		{0x1FF, 8, -1},
+		{0x8000, 16, -32768},
+		{5, 8, 5},
+		{1, 1, -1},
+		{0, 1, 0},
+		{-1, 64, -1},
+		{1 << 62, 64, 1 << 62},
+	}
+	for _, c := range cases {
+		if got := ToSigned(c.v, c.width); got != c.want {
+			t.Errorf("ToSigned(%d, %d) = %d, want %d", c.v, c.width, got, c.want)
+		}
+	}
+}

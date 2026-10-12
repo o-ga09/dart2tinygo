@@ -1050,12 +1050,16 @@ List<UnsupportedSyntaxError> _checkUpdaterExpression(
   ];
 }
 
-const _compoundAssignmentOperators = {'+=', '-=', '*=', '/=', '%=', '~/='};
+const _compoundAssignmentOperators = {
+  '+=', '-=', '*=', '/=', '%=', '~/=', '&=', '|=', '^=', '<<=', '>>=', //
+};
 
 /// `%=`/`~/=` only make sense on `int` in v0.0.2 minimal scope: `%=` goes
 /// through `dartrt.Mod` (see [_arithmeticOperators]), which is `int`-only,
 /// and Dart's floating-point `~/` isn't implemented.
-const _intOnlyCompoundAssignmentOperators = {'%=', '~/='};
+const _intOnlyCompoundAssignmentOperators = {
+  '%=', '~/=', '&=', '|=', '^=', '<<=', '>>=', //
+};
 
 /// `/=` only makes sense on `double`: Dart's `/` always returns `double`
 /// (`num.operator/`), so `int /= anything` is invalid Dart (a `double`
@@ -1074,7 +1078,7 @@ List<UnsupportedSyntaxError> _checkCompoundAssignment(
         result,
         expression.offset,
         'assignment operator "$op" is not supported in v0.0.2 minimal scope '
-        '(only +=/-=/*=//=/%=/~/=)',
+        '(only +=/-=/*=//=/%=/~/=/&=/|=/^=/<<=/>>=)',
       ),
     ];
   }
@@ -1687,7 +1691,9 @@ List<UnsupportedSyntaxError> _checkFieldWriteTarget(
   ];
 }
 
-const _fieldAssignmentOperators = {'=', '+=', '-=', '*=', '/=', '%=', '~/='};
+const _fieldAssignmentOperators = {
+  '=', '+=', '-=', '*=', '/=', '%=', '~/=', '&=', '|=', '^=', '<<=', '>>=', //
+};
 
 /// `c.value = v;` / `this.value = v;` / bare `value = v;` (implicit
 /// `this`), #32. Unlike a local (see [_checkCompoundAssignment]), a field
@@ -1704,7 +1710,7 @@ List<UnsupportedSyntaxError> _checkFieldWrite(
         result,
         expression.offset,
         'assignment operator "$op" is not supported on a field in v0.0.2 '
-        'minimal scope (only =/+=/-=/*=//=/%=/~/=)',
+        'minimal scope (only =/+=/-=/*=//=/%=/~/=/&=/|=/^=/<<=/>>=)',
       ),
     ];
   }
@@ -1943,6 +1949,23 @@ List<UnsupportedSyntaxError> _checkExpression(
     }
     return const [];
   }
+  if (expression is PrefixExpression && expression.operator.lexeme == '~') {
+    final operand = expression.operand;
+    final operandErrors = _checkExpression(result, operand);
+    if (operandErrors.isNotEmpty) return operandErrors;
+    final type = operand.staticType;
+    if (type == null || !type.isDartCoreInt) {
+      return [
+        _error(
+          result,
+          operand.offset,
+          '"~" operand has type "${type?.getDisplayString() ?? '?'}", but '
+          'must be an int expression',
+        ),
+      ];
+    }
+    return const [];
+  }
   if (expression is PrefixExpression && expression.operator.lexeme == '-') {
     final operand = expression.operand;
     final operandErrors = _checkExpression(result, operand);
@@ -1983,8 +2006,13 @@ const _logicalOperators = {'&&', '||'};
 /// Dart's `/` always returns `double` even for two `int`s, which the
 /// generator can't reproduce without a cast, so an `int` operand is
 /// rejected rather than silently promoted (convert with `.toDouble()`).
-const _arithmeticOperators = {'+', '-', '*', '~/', '%', '/'};
-const _intOnlyArithmeticOperators = {'~/', '%'};
+///
+/// `&`/`|`/`^`/`<<`/`>>` (bitwise, #51) are `int` only and map 1:1 onto
+/// Go's tokens (`docs/mapping.md`); `>>>` is not supported.
+const _arithmeticOperators = {
+  '+', '-', '*', '~/', '%', '/', '&', '|', '^', '<<', '>>', //
+};
+const _intOnlyArithmeticOperators = {'~/', '%', '&', '|', '^', '<<', '>>'};
 
 /// Comparison (`==`/`!=`/`</`<=`/`>`/`>=`), logical (`&&`/`||`), and `int`/
 /// `double` arithmetic (`+`/`-`/`*`/`~/`/`%`/`/`) binary operators map 1:1
@@ -2012,8 +2040,8 @@ List<UnsupportedSyntaxError> _checkBinaryExpression(
         result,
         expression.offset,
         'binary operator "$op" is not supported in v0.0.2 minimal scope (only '
-        'comparisons ==/!=/</<=/>/>=, logical &&/||, and arithmetic '
-        '+, -, *, ~/, %, /)',
+        'comparisons ==/!=/</<=/>/>=, logical &&/||, arithmetic '
+        '+, -, *, ~/, %, /, and int bitwise &, |, ^, <<, >>)',
       ),
     ];
   }
@@ -2241,6 +2269,7 @@ List<UnsupportedSyntaxError>? _checkNumConversion(
   final String requiredType;
   switch (name) {
     case 'toDouble':
+    case 'toSigned':
       requiredType = 'int';
     case 'toInt':
     case 'round':
@@ -2260,7 +2289,25 @@ List<UnsupportedSyntaxError>? _checkNumConversion(
   final errors = <UnsupportedSyntaxError>[
     ..._checkExpression(result, target),
   ];
-  if (call.argumentList.arguments.isNotEmpty) {
+  if (name == 'toSigned') {
+    // `x.toSigned(n)` (#51) → `dartrt.ToSigned(x, n)`; the width must be a
+    // literal so an out-of-range width is reported here, not at runtime.
+    final args = call.argumentList.arguments;
+    final width = args.length == 1 ? args.single : null;
+    if (width is! IntegerLiteral ||
+        width.value == null ||
+        width.value! < 1 ||
+        width.value! > 64) {
+      errors.add(
+        _error(
+          result,
+          call.argumentList.offset,
+          '".toSigned()" requires exactly one int literal width between 1 '
+          'and 64',
+        ),
+      );
+    }
+  } else if (call.argumentList.arguments.isNotEmpty) {
     errors.add(
       _error(result, call.argumentList.offset, '".$name()" takes no arguments'),
     );

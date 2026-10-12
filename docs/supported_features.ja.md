@@ -23,6 +23,7 @@
 | `x ~/= y` / `%=` | 実装済み（`int` のみ。`~/=` は `x /= y`、`%=` は `x = dartrt.Mod(x, y)`） |
 | `x /= y` | 実装済み（`double` のみ — Dart の `/` は常に `double` を返すので、そもそも `int /= ...` は有効な Dart ではない。`int` は `~/=` を使う） |
 | 算術 `a + b` / `-` / `*` / `/` / `~/` / `%` | 実装済み（`+`/`-`/`*` は同じ型の `int`/`int` か `double`/`double`、`+` は `String`/`String` も可、`~/`/`%` は `int`、`/` は `double`） |
+| ビット演算子 `&` / `\|` / `^` / `~` / `<<` / `>>` と `&=` / `\|=` / `^=` / `<<=` / `>>=` | 実装済み（`int` のみ。`>>>` は未対応。Dart と Go で優先順位が違う箇所は括弧を補う） |
 | `int` ⇄ `double` 変換：`.toDouble()` / `.toInt()` / `.round()` | 実装済み（`.toDouble()` は `int` に、`.toInt()`/`.round()` は `double` に） |
 | `if` / `else if` / `else` | 実装済み（各分岐はブロック。ループと `if` は自由にネスト可） |
 | 比較（`==`/`!=`/`<`/`<=`/`>`/`>=`）・論理（`&&`/`\|\|`/`!`）演算子 | 実装済み（`==`/`!=` は同じ型の `int`/`double`/`bool`/`String` 同士、`<`/`<=`/`>`/`>=` は同じ型の `int`/`int` か `double`/`double`、`&&`/`\|\|`/`!` は `bool`） |
@@ -33,7 +34,7 @@
 | `enum` | 実装済み — ユーザー定義の enum（`enum Mode { off, on }`：`.index`、`.name`、`==`/`!=`、`switch` に対応）と、`@GoType`/`@GoName` によるバインディング enum（各値が既存の Go 識別子にマップされる。`static external` getter 定数と同様）。型パラメータ、`with`/`implements`、追加のフィールド・メソッド、値へのコンストラクタ引数は未対応 |
 | `Duration` と `sleep` | 実装済み（`dart:io` の `sleep()`、`Duration(days:/hours:/minutes:/seconds:/milliseconds:/microseconds:)`） |
 | 注釈によるバインディング | 実装済み（`@GoImport` / `@GoName` / `@GoType`。external なトップレベル関数、`@GoType` クラス自身の `external`／`@GoName` 付きコンストラクタ（`Pin(3)`）、`@GoType` のレシーバ — ローカル変数、または（チェーン。任意の深さ）別のバインディング呼び出し／コンストラクタの戻り値 — へのメソッド呼び出しで、戻り値は `int`/`double`/`bool`/`String`/`@GoType`、引数もそれらの型、Go 定数は `external` getter で参照。[`writing_bindings.ja.md`](./writing_bindings.ja.md) 参照） |
-| 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`FormatDouble` は `print()` 内の `double` の文字列補間に組み込み済み |
+| 共通 Go ランタイム（`dartrt`） | 実装済み（`packages/dart2tinygo/go/`。使ったときだけ import される）。`Mod` は `%`/`%=` に、`ToSigned` は `int.toSigned(n)` に、`FormatDouble` は `print()` 内の `double` の文字列補間に組み込み済み |
 | `tinygo_machine`: LED、GPIO入出力、ADC、PWM、スリープ | 実装済み — GPIO（`Pin.led`、`Pin(n)`、`configure(PinMode.output\|input)`、`high()`/`low()`/`toggle()`/`get()`）、ADC（`newAdc(pin)`、`.read()`）、PWM（`newPwm(pin, freqHz)`、`.setFrequency(freqHz)`、`.setDuty(percent)`）。ボード非依存で `wioterminal`/`pico`（PWMのみ `itsybitsy-m4` も）の `tinygo build` で確認済み — [`writing_bindings.ja.md`](./writing_bindings.ja.md) の「決定済み・未実装」参照 |
 | `wio_terminal`: LCD文字表示/図形/色、ユーザーLED、ボタン/スイッチ、ブザー、照度/マイクADC、加速度センサー、赤外線送信、USBシリアル | 実装済み — `newDisplay()`/`.clear()`/`.drawText()` に加え `.width()`/`.height()`/`.fillScreen()`/`.setBacklight()`/`.setRotation()`/`.drawPixel\|Line\|Rect\|Circle()`/`.fillRect\|Circle()`/`.drawTextColor\|Size()`/`.textWidth()` と `rgb(r,g,b)` → `Color`、`newLed()`/`.on()`/`.off()`/`.toggle()`（`machine.LED`、青）、`newButtons()`/`.isPressed(button)`/`.waitPressed(button)`（ボタンA/B/C + 5方向スイッチ、プルアップ入力）、`newBuzzer()`/`.tone(freqHz)`/`.stop()`/`.beep(freqHz, durationMs)`（`machine.WIO_BUZZER`、TCC0 PWM）、`newLightSensor()`/`newMicrophone()`（`machine.WIO_LIGHT`/`WIO_MIC` ADC）、`newAccelerometer()`/`.update()`/`.x()`.../`.xMilliG()`...（I2C1経由のLIS3DHTR）、`newIrSender()`/`.sendNec()`/`.sendRaw32()`（`machine.WIO_IR`、TCC4 PWMキャリアによるNEC送信）、`serialAvailable()`/`serialReadLine()`（USB CDCシリアル入力）。`tinygo build -target=wioterminal`（`examples/button_led`、および全バインディングをまとめて動かす `examples/wioterminal_demo`、#24）で確認済み。[`writing_bindings.ja.md`](./writing_bindings.ja.md) の「このリポジトリにあるバインディング」参照 |
 | `wio_terminal/hid`: USB HIDキーボード/マウス | 実装済み — 別ライブラリ（`import 'package:wio_terminal/hid.dart';`）と別 Go サブパッケージ（`go/hid`、`machine/usb/hid/keyboard`+`.../mouse`）に分離し、HIDを使わないプログラムがそのUSBディスクリプタ（CDC/オートリセットの挙動に影響しうる）を有効化しないようにしている。`newKeyboard()`/`.write()`/`.press()`、`newMouse()`/`.move()`/`.click()`。デバイスモードのみ。`dart2tinygo build` を通した end-to-end で `tinygo build -target=wioterminal` を確認済み。[`writing_bindings.ja.md`](./writing_bindings.ja.md) の「重い依存を別の Go サブパッケージに分離する」参照 |
@@ -50,7 +51,7 @@
 | 機能 | 状態 |
 | --- | --- |
 | 型: `List<T>`（`T` = `double`/`bool`/`String`/enum/`@GoType`/ユーザークラス） | 実装済み（Go の `[]T` に対応、キャストなし — [`mapping.ja.md`](./mapping.ja.md#int-以外の要素型の-listt50実装済み) 参照。リテラル、添字の読み書き、`.length`、`.add()`。ネストしたリスト、`List.filled`、スプレッドは未実装） |
-| ビット演算、`int.toSigned(n)` | 未実装 |
+| ビット演算、`int.toSigned(n)` | 実装済み（#51。`toSigned` は 1〜64 の int リテラル幅を取り `dartrt.ToSigned` に変換） |
 
 ## 一般の `String` への数値の整形
 

@@ -37,3 +37,12 @@ func FormatDouble(f float64) string {
 	}
 	return s + ".0"
 }
+
+// ToSigned implements Dart's int.toSigned(width): it keeps the low width
+// bits of v and reinterprets them as a two's-complement signed value, so
+// ToSigned(0xFF, 8) is -1 and ToSigned(0x7F, 8) is 127. width must be in
+// 1..64 (the transpiler's checker enforces this for literal widths).
+func ToSigned(v, width int) int {
+	shift := uint(64 - width)
+	return v << shift >> shift
+}
