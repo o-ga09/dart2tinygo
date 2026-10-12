@@ -137,8 +137,7 @@ followed by `go mod tidy`. Everything else is left to `go mod tidy`.
 Wi-Fi/HTTP bindings this exists for all speak `[]byte` (`io.Reader`/
 `io.Writer`, `strconv`, network buffers), and Dart itself uses `List<int>`
 as its byte-buffer type (`Uint8List` extends it). This is narrower than the
-`List<T>` → `[]T` mapping decided for v0.0.3 generically; other element types
-(`List<double>`, `List<String>`, …) stay out of scope until then.
+generic `List<T>` → `[]T` mapping below, which covers every other element type.
 
 Dart's element type is `int`, but Go's `[]byte` element type is `byte`
 (`uint8`), so every read/write crosses that boundary with an explicit,
@@ -159,6 +158,29 @@ List equality (`a == b`) is not supported: Go slices aren't comparable with
 `==` (a compile error, except against `nil`), so this is rejected by the
 existing "operands must have the same type" comparison rule, which never
 lists `List<int>` as a comparable type.
+
+## `List<T>` for other element types (#50, implemented)
+
+Any element type `T` that is itself a supported non-list type (`double`,
+`bool`, `String`, a user enum, a `@GoType` binding, or a user class) maps to
+Go's `[]T` (`List<double>` → `[]float64`, `List<String>` → `[]string`,
+`List<Pin>` → `[]machine.Pin`). Only `List<int>` is special-cased to
+`[]byte` (above). Because the Go element type is the Dart element type,
+**no casts are inserted** (unlike `List<int>`):
+
+| Dart | Go |
+| --- | --- |
+| `<double>[1.5, 2.5]` (or an inferred `[true, false]`) | `[]float64{1.5, 2.5}` / `[]bool{true, false}` |
+| `<String>[]` | `[]string{}` |
+| `data[i]` (read) | `data[i]` |
+| `data[i] = v;` (only plain `=`) | `data[i] = v` |
+| `data.add(v);` | `data = append(data, v)` |
+| `data.length` | `len(data)` |
+
+`v` must have exactly the element type (no implicit `int` → `double`);
+a mismatch is reported by the checker. Nested lists (`List<List<T>>`),
+spreads/`if`/`for` inside a literal, `List.filled`, and list equality stay
+unsupported. As with `List<int>`, indexing/`add` require a plain local.
 
 ## `String` operations (decided 2026-09-22, implemented)
 
@@ -331,7 +353,7 @@ body statement instead, or a method), and operator overloading.
 | `String` | `string`; `.length` → `len(s)` (byte length — see "List<int>" below for the rationale); `+` concatenation; `.substring`; no general indexing in v0.0.1 | impl. (literals/locals/binding results, `+`, `.substring()`, `.length`, `.codeUnits`) |
 | `Duration` | `time.Duration`; non-literal `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | impl. (literals) |
 | `List<int>` | `[]byte` — see "List<int>" below | impl. |
-| `List<T>` (`T` other than `int`) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim, `List.filled` → `make` + loop; growable/fixed not distinguished | decided (v0.0.3) |
+| `List<T>` (`T` other than `int`, not a list) | `[]T`; `add` → `append`, `length` → `len`, indexing verbatim — see "`List<T>` for other element types" above; `List.filled` → `make` + loop is still not implemented; growable/fixed not distinguished | impl. (`List.filled` decided, v0.0.3) |
 | `enum` | user enum: `type E int` + `const ( ... iota )` + a name table, `.index`/`.name`/`==`/`switch` — see "enum" above; `@GoType`/`@GoName` binding enum: the constant's `@GoName` value, verbatim | impl. |
 | class (no inheritance) | `struct` + `NewFoo(...)` + pointer-receiver methods; instances are always `*Foo` (Dart reference semantics, `==` is identity) — see "class (no inheritance)" above | impl. |
 | top-level function | `func`; positional parameters only, named/optional parameters rejected by the checker — see "Top-level functions" above | impl. |

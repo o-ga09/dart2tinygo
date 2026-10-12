@@ -121,8 +121,8 @@ Go の呼び出しに 1:1 で対応し、トランスパイラがラッパーを
 `List<int>` は Go の `[]byte` に対応する（`[]int` ではない）。この機能が存在する理由である
 SD カード・I2C/UART・Wi-Fi/HTTP のバインディングはすべて `[]byte`（`io.Reader`/`io.Writer`、
 `strconv`、ネットワークバッファ）でやり取りするし、Dart 自身も `List<int>` をバイトバッファの
-型として使う（`Uint8List` は `List<int>` を継承する）。これは v0.0.3 で決めた汎用の
-`List<T>` → `[]T` より狭いスコープで、`int` 以外の要素型（`List<double>`、`List<String>` など）
+型として使う（`Uint8List` は `List<int>` を継承する）。これは 下記の汎用 `List<T>` → `[]T` が
+`int` 以外の要素型（`List<double>`、`List<String>` など）
 は v0.0.3 まで対象外のまま。
 
 Dart 側の要素型は `int` だが、Go の `[]byte` の要素型は `byte`（`uint8`）なので、
@@ -143,6 +143,27 @@ Dart 側の要素型は `int` だが、Go の `[]byte` の要素型は `byte`（
 リストの等価比較（`a == b`）は未対応：Go のスライスは（`nil` との比較を除いて）
 `==` で比較できない（コンパイルエラーになる）ため、既存の「両辺が同じ型でなければ
 ならない」比較ルールが `List<int>` を比較可能な型として挙げていないことで、自然に拒否される。
+
+## `int` 以外の要素型の `List<T>`（#50、実装済み）
+
+要素型 `T` が、それ自体サポート済みのリスト以外の型（`double`、`bool`、`String`、ユーザー enum、
+`@GoType` バインディング、ユーザークラス）であれば、Go の `[]T` に対応する（`List<double>` →
+`[]float64`、`List<String>` → `[]string`、`List<Pin>` → `[]machine.Pin`）。`[]byte` になるのは
+`List<int>` だけ（上記）。Go の要素型が Dart の要素型と同じなので、`List<int>` と違って
+**キャストは挿入しない**:
+
+| Dart | Go |
+| --- | --- |
+| `<double>[1.5, 2.5]`（または推論された `[true, false]`） | `[]float64{1.5, 2.5}` / `[]bool{true, false}` |
+| `<String>[]` | `[]string{}` |
+| `data[i]`（読み取り） | `data[i]` |
+| `data[i] = v;`（単純な `=` のみ） | `data[i] = v` |
+| `data.add(v);` | `data = append(data, v)` |
+| `data.length` | `len(data)` |
+
+`v` は要素型と完全に一致している必要がある（`int` → `double` の暗黙変換なし）。不一致は checker が
+報告する。ネストしたリスト（`List<List<T>>`）、リテラル内のスプレッド／`if`／`for`、`List.filled`、
+リストの等価比較は未対応のまま。`List<int>` と同様、添字アクセスと `add` はプレーンなローカル変数に限る。
 
 ## `String` 操作（2026-09-22 決定、実装済み）
 
@@ -307,7 +328,7 @@ initializer list（`: field = expr, ...`）も使わない（Dart は宣言時
 | `String` | `string`。`.length` → `len(s)`（バイト長。理由は下の「List<int>」を参照）。`+` 連結、`.substring`。v0.0.1 では一般の添字アクセスなし | 実装済（リテラル／ローカル変数／バインディング戻り値、`+`、`.substring()`、`.length`、`.codeUnits`） |
 | `Duration` | `time.Duration`。リテラルでない `Duration(milliseconds: n)` → `time.Duration(n) * time.Millisecond` | 実装済（リテラル） |
 | `List<int>` | `[]byte` — 下の「List<int>」を参照 | 実装済 |
-| `List<T>`（`T` が `int` 以外） | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま、`List.filled` → `make` + ループ。growable/fixed は区別しない | 決定（v0.0.3） |
+| `List<T>`（`T` が `int` 以外でリストでない） | `[]T`。`add` → `append`、`length` → `len`、添字はそのまま（上の「`int` 以外の要素型の `List<T>`」参照）。`List.filled` → `make` + ループは未実装。growable/fixed は区別しない | 実装済（`List.filled` は決定、v0.0.3） |
 | `enum` | ユーザー定義 enum：`type E int` + `const ( ... iota )` + 名前テーブル、`.index`/`.name`/`==`/`switch` — 上の「enum」参照。`@GoType`/`@GoName` バインディング enum：定数の `@GoName` の値をそのまま | 実装済 |
 | クラス（継承なし） | `struct` + `NewFoo(...)` + ポインタレシーバのメソッド。インスタンスは常に `*Foo`（Dart の参照意味論。`==` は同一性比較） — 上の「クラス（継承なし）」参照 | 実装済 |
 | トップレベル関数 | `func`。位置引数のみ。名前付き／省略可能引数は checker が拒否 — 上の「トップレベル関数」を参照 | 実装済 |
