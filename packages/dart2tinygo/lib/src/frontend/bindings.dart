@@ -168,16 +168,65 @@ List<GoLocalModule> localModuleReplacesOf(GoLocalModule module) {
     if (arrow < 0) continue;
     final target = trimmed.substring(arrow + 2).trim();
     if (target.isEmpty) continue;
-    final targetDir = p.isAbsolute(target)
+    var targetDir = p.isAbsolute(target)
         ? target
         : p.normalize(p.join(module.directory, target));
+    if (!File(p.join(targetDir, 'go.mod')).existsSync()) {
+      final cached = _pubCacheSibling(targetDir);
+      if (cached == null) continue;
+      targetDir = cached;
+    }
     final targetGoMod = File(p.join(targetDir, 'go.mod'));
-    if (!targetGoMod.existsSync()) continue;
     final modulePath = _moduleLine(targetGoMod.readAsStringSync());
     if (modulePath == null) continue;
     found.add(GoLocalModule(modulePath: modulePath, directory: targetDir));
   }
   return found;
+}
+
+/// Resolves a workspace-relative replace target such as `<root>/dep/go`
+/// against a pub cache, where the sibling package is installed as
+/// `<root>/dep-<version>/go` (#63). Returns the directory of the highest
+/// installed version that has a `go.mod`, or null if there is none.
+String? _pubCacheSibling(String missingDir) {
+  final goName = p.basename(missingDir);
+  final pkgDir = p.dirname(missingDir);
+  final pkgName = p.basename(pkgDir);
+  final cacheRoot = Directory(p.dirname(pkgDir));
+  if (!cacheRoot.existsSync()) return null;
+  final prefix = '$pkgName-';
+  String? bestDir;
+  List<int>? bestVersion;
+  for (final entry in cacheRoot.listSync(followLinks: false)) {
+    final name = p.basename(entry.path);
+    if (entry is! Directory || !name.startsWith(prefix)) continue;
+    final version = _parseVersion(name.substring(prefix.length));
+    if (version == null) continue;
+    final candidate = p.join(entry.path, goName);
+    if (!File(p.join(candidate, 'go.mod')).existsSync()) continue;
+    if (bestVersion == null || _compareVersions(version, bestVersion) > 0) {
+      bestDir = candidate;
+      bestVersion = version;
+    }
+  }
+  return bestDir;
+}
+
+/// Parses `1.2.3` (ignoring any `-pre`/`+build` suffix) into numeric parts.
+List<int>? _parseVersion(String text) {
+  final core = text.split(RegExp(r'[-+]')).first;
+  final parts = core.split('.').map(int.tryParse).toList();
+  if (parts.isEmpty || parts.contains(null)) return null;
+  return parts.cast<int>();
+}
+
+int _compareVersions(List<int> a, List<int> b) {
+  for (var i = 0; i < a.length || i < b.length; i++) {
+    final x = i < a.length ? a[i] : 0;
+    final y = i < b.length ? b[i] : 0;
+    if (x != y) return x.compareTo(y);
+  }
+  return 0;
 }
 
 String? _moduleLine(String goModSource) {

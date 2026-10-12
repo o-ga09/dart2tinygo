@@ -177,6 +177,19 @@ its own, and how `dart2tinygo build`/`flash` now closes that gap
 `_withTransitiveLocalModules` in `bin/dart2tinygo.dart`). Confirmed end to
 end for `wio_terminal/go/pins.go` depending on `tinygo_machine/go`.
 
+### Relative replaces under a pub cache (#63)
+
+A binding's `go.mod` replaces its sibling with a workspace-relative path
+(`../../tinygo_machine/go`). Once the binding is installed as a normal pub
+dependency, pub caches each package under a version-suffixed directory
+(`~/.pub-cache/hosted/pub.dev/wio_terminal-0.0.2/`), so that path dangles and
+`go mod tidy` would try (and fail) to fetch the module from the network.
+`localModuleReplacesOf` therefore falls back, when the relative target has no
+`go.mod`, to the sibling `<pkg>-<version>/go` directory in the same cache
+(highest installed version wins) and copies *that* path into the generated
+top-level `go.mod`. This is generic path resolution — the core knows nothing
+about which bindings exist.
+
 ## Shipping the Go runtime with the binding
 
 Put the Go module in a `go/` directory next to the binding's `pubspec.yaml` (module path = repository path of that directory, e.g. `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`). When the transpiler sees a binding whose package has `go/go.mod`, it emits
