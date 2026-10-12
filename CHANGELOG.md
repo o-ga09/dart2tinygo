@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.3](https://github.com/o-ga09/dart2tinygo/compare/v0.0.2...v0.0.3) - 2026-10-12
+
+- fix: enable pub.dev publishing for tinygo_machine by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/52
+- build(deps): Bump actions/setup-go from 5.6.0 to 7.0.0 by @dependabot[bot] in https://github.com/o-ga09/dart2tinygo/pull/55
+- build(deps): Bump github/codeql-action/upload-sarif from 4.38.0 to 4.38.2 by @dependabot[bot] in https://github.com/o-ga09/dart2tinygo/pull/59
+- build(deps): Bump Songmu/tagpr from 1.20.3 to 1.21.2 by @dependabot[bot] in https://github.com/o-ga09/dart2tinygo/pull/61
+- build(deps): Bump trufflesecurity/trufflehog from 3.97.5 to 3.99.0 by @dependabot[bot] in https://github.com/o-ga09/dart2tinygo/pull/62
+- fix: resolve workspace-relative go.mod replaces under a pub cache by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/66
+- docs: scope string interpolation to print() and document fromCharCodes pattern by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/67
+- fix(wio_terminal): add timeout to wifi httpGet/httpPost by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/68
+- feat: generalize List element type to []T by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/69
+
 ## [v0.0.2](https://github.com/o-ga09/dart2tinygo/compare/v0.0.1...v0.0.2) - 2026-09-22
 
 - feat: remaining tinygo_machine/wio_terminal bindings (#44, #12-20, #22-23) by @o-ga09 in https://github.com/o-ga09/dart2tinygo/pull/46
