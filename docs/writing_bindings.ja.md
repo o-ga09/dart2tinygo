@@ -175,6 +175,19 @@ end-to-end で確認済み。メインライブラリしか import しないサ�
 `wio_terminal/go/pins.go` が `tinygo_machine/go` に依存するケースで
 end-to-end に確認済み。
 
+### pub-cache 下での相対 replace（#63）
+
+バインディングの `go.mod` は兄弟パッケージをワークスペース相対パス
+（`../../tinygo_machine/go`）で replace している。通常の pub 依存として
+インストールされると、pub は各パッケージをバージョン付きディレクトリ
+（`~/.pub-cache/hosted/pub.dev/wio_terminal-0.0.2/`）にキャッシュするため、
+このパスは存在せず、`go mod tidy` がネットワークから取得しようとして失敗する。
+そこで `localModuleReplacesOf` は、相対パスの指す先に `go.mod` が無い場合、
+同じキャッシュ内の兄弟ディレクトリ `<pkg>-<version>/go`（インストール済みの
+最新バージョンを優先）にフォールバックし、*そのパス*を生成する最上位
+`go.mod` にコピーする。これは汎用的なパス解決であり、コアはどのバインディングが
+存在するかを一切知らない。
+
 ## Go ランタイムをバインディングに同梱する
 
 Go モジュールはバインディングの `pubspec.yaml` と同じ階層の `go/` ディレクトリに置きます（モジュールパスはそのディレクトリのリポジトリ上のパス。例: `github.com/o-ga09/dart2tinygo/packages/wio_terminal/go`）。パッケージに `go/go.mod` があるバインディングを使うと、トランスパイラは生成する `go.mod` に
