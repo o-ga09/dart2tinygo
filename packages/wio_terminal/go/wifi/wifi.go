@@ -6,10 +6,7 @@
 package wifi
 
 import (
-	"io"
-	"net/http"
-	"strings"
-
+	"github.com/o-ga09/dart2tinygo/packages/wio_terminal/go/wifi/httpx"
 	"tinygo.org/x/drivers/netdev"
 	"tinygo.org/x/drivers/netlink"
 	"tinygo.org/x/drivers/netlink/probe"
@@ -64,31 +61,16 @@ func (w *WiFi) Disconnect() {
 }
 
 // HttpGet fetches url and returns the response body as text, or "" on
-// failure (network error, non-readable body, ...).
+// failure (network error, non-readable body, ...). The whole request
+// (connect, write, read) is bounded by httpx.DefaultTimeout (15s); on
+// timeout it returns "" instead of blocking forever.
 func (w *WiFi) HttpGet(url string) string {
-	resp, err := http.Get(url)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ""
-	}
-	return string(body)
+	return httpx.Get(url, httpx.DefaultTimeout)
 }
 
 // HttpPost posts body to url with the given content type and returns the
-// response body as text, or "" on failure.
+// response body as text, or "" on failure or after the same 15s timeout
+// as HttpGet.
 func (w *WiFi) HttpPost(url, contentType, body string) string {
-	resp, err := http.Post(url, contentType, strings.NewReader(body))
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return ""
-	}
-	return string(data)
+	return httpx.Post(url, contentType, body, httpx.DefaultTimeout)
 }
