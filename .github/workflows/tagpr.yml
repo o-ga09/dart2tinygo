@@ -27,6 +27,6 @@ jobs:
           token: ${{ secrets.TAGPR_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
       # tagpr's postVersionCommand runs tool/sync_versions.dart.
       - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
-      - uses: Songmu/tagpr@0c4eb5a3b0862693702acea436a7c68bd586530d # v1.21.2
+      - uses: Songmu/tagpr@e1250d6c84e4425db82b5e90549d62dfe23e9ebe # v1.21.4
         env:
           GITHUB_TOKEN: ${{ secrets.TAGPR_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
